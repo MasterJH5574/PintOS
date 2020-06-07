@@ -29,7 +29,12 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  char *name;
   tid_t tid;
+
+  /*Jiaxin: reason as below*/
+  name = palloc_get_page(0);
+  strlcpy(name, file_name, PGSIZE);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -38,10 +43,15 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /*Jiaxin: get thread_name*/
+  char *thread_name, *save_ptr;
+  thread_name = strtok_r(name, " ", save_ptr);
+  
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  palloc_free_page(name);
   return tid;
 }
 
@@ -54,12 +64,54 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  /*Jiaxin: get real thread_name*/
+  char *token, *save_ptr;
+  token = strtok_r(file_name, " ", save_ptr);
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (token, &if_.eip, &if_.esp);
+  
+  /*Jiaxin: only when success, parse the augument*/
+  if (success)
+  {
+    char* esp = if_.esp;
+    int top = 0;
+    char* args[256];
+    for (; token != NULL; token = strtok_r(NULL, " ", save_ptr))
+    {
+      int len = strlen(token);
+      esp -= len + 1;
+      strlcpy(esp, token, len + 1);
+      args[top++] = esp;
+    }
+    //word-align
+    while ((int) esp%4) esp--;
+    //argv[argc] = null
+    esp -= 4;
+    *((int *) esp) = 0;
+    //argv[]
+    for (int i = top - 1; i >= 0; --i)
+    {
+      esp -= 4;
+      *((char **) esp) = args[i];
+    }
+    //argv
+    esp -= 4;
+    char **argv = (char **) esp;
+    *((char ***) esp) = argv;
+    //argc
+    esp -= 4;
+    int argc = top;
+    *((int *) esp) = argc;
+    //return_address
+    esp -= 4;
+    *((int *) esp) = 0;
+    if_.esp = esp;
+  }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
