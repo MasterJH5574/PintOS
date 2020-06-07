@@ -178,4 +178,6 @@ void list_unique (struct list *, struct list *duplicates,
 struct list_elem *list_max (struct list *, list_less_func *, void *aux);
 struct list_elem *list_min (struct list *, list_less_func *, void *aux);
 
+typedef struct list list;
+typedef struct list_elem list_elem;
 #endif /* lib/kernel/list.h */
