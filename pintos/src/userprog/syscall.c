@@ -1,13 +1,17 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
-#include <threads/vaddr.h>
-#include <lib/user/syscall.h>
-#include <devices/shutdown.h>
-#include <filesys/filesys.h>
-#include <threads/synch.h>
+#include <string.h>
+#include <user/syscall.h>
+#include "devices/input.h"
+#include "devices/shutdown.h"
+#include "threads/vaddr.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "threads/synch.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 #include "pagedir.h"
 #include "process.h"
 
@@ -22,7 +26,7 @@ static pid_t sys_exec(const char *cmd_line);
 static int sys_wait(pid_t pid);
 static bool sys_create(const char *file, unsigned initialize_size);
 static bool sys_remove(const char *file);
-static int sys_open(const char* file);
+static int sys_open(const char* filename);
 static int sys_filesize(int fd);
 static int sys_read(int fd, void *buffer, unsigned size);
 static int sys_write(int fd, const void *buffer, unsigned size);
@@ -37,6 +41,19 @@ static void sys_close(int fd);
  */
 struct lock filesys_lock;
 
+
+/* Get the struct file_descriptor of struct thread _thread. */
+static struct file_descriptor *
+get_file_descriptor(struct thread *_thread, int fd) {
+  struct list_elem *_elem = list_begin(&(_thread->file_descriptors));
+  while (_elem != list_end(&(_thread->file_descriptors))) {
+    struct file_descriptor *_fd = list_entry(_elem,
+                                    struct file_descriptor, elem);
+    if (_fd->fd == fd)
+      return _fd;
+  }
+  return NULL;
+}
 
 /* Check whether the address given by the user program which invoked a system
  * call is valid:
@@ -159,6 +176,10 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 3);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
           *((unsigned *)syscall_args[2]));
+      /* Size to read is more than 4KB. Reject. */
+      if (*((unsigned *)syscall_args[2]) > 0x1000)
+        sys_exit(-1);
+
       f->eax = sys_read(*((int *)syscall_args[0]),
           *((void **)syscall_args[1]),
           *((unsigned *)syscall_args[2]));
@@ -167,6 +188,10 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 3);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
                               *((unsigned *)syscall_args[2]));
+      /* Size to read is more than 4KB. Reject. */
+      if (*((unsigned *)syscall_args[2]) > 0x1000)
+        sys_exit(-1);
+
       f->eax = sys_write(*((int *)syscall_args[0]),
                         *((const void **)syscall_args[1]),
                         *((unsigned *)syscall_args[2]));
@@ -232,39 +257,133 @@ sys_remove(const char *file) {
   lock_release(&filesys_lock);
   return res;
 }
-/* Ruihang End */
 
 static int
-sys_open(const char* file) {
-  // Todo
+sys_open(const char* filename) {
+  lock_acquire(&filesys_lock);
+  struct file *_file = filesys_open(filename);
+  lock_release(&filesys_lock);
+
+  /* Return -1 if the file could not be opened. */
+  if (_file == NULL)
+    return -1;
+
+  /* Malfunction until malloc() is implemented. */
+  struct file_descriptor *fd = malloc(sizeof(struct file_descriptor));
+  fd->fd = thread_current()->fd_num++;
+  strlcpy(fd->file_name, filename, strlen(filename));
+  fd->_file = _file;
+  fd->owner_thread = thread_current();
+  list_push_back(&(thread_current()->file_descriptors), &(fd->elem));
+
+  return fd->fd;
 }
 
 static int
 sys_filesize(int fd) {
-  // Todo
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Terminate if fd is not opened by the current thread. */
+  if (_fd == NULL)
+    sys_exit(-1);
+
+  lock_acquire(&filesys_lock);
+  int filesize = file_length(_fd->_file);
+  lock_release(&filesys_lock);
+  return filesize;
 }
 
 static int
 sys_read(int fd, void *buffer, unsigned size) {
-  // Todo
+  /* If fd represent the stdout, terminate. */
+  if (fd == STDOUT_FILENO)
+    sys_exit(-1);
+
+  unsigned res;
+  uint8_t *ptr = buffer;
+  if (fd == STDIN_FILENO) {
+    /* Read from stdin using input_getc(). */
+    res = size;
+    while (size) {
+      *ptr = input_getc();
+      ptr++;
+      size--;
+    }
+  } else {
+    /* Read from file. */
+    struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+    /* Terminate if fd is not opened by the current thread. */
+    if (_fd == NULL)
+      sys_exit(-1);
+
+    lock_acquire(&filesys_lock);
+    res = file_read(_fd->_file, buffer, size);
+    lock_release(&filesys_lock);
+  }
+  return (int)res;
 }
 
 static int
 sys_write(int fd, const void *buffer, unsigned size) {
-  // Todo
+  /* If fd represent stdin, terminate. */
+  if (fd == STDIN_FILENO)
+    sys_exit(-1);
+
+  unsigned res;
+  if (fd == STDOUT_FILENO) {
+    /* Output to stdout using putbuf(). */
+    res = size;
+    putbuf(buffer, size);
+  } else {
+    /* Write to file. */
+    struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+    /* Terminate if fd is not opened by the current thread. */
+    if (_fd == NULL)
+      sys_exit(-1);
+
+    lock_acquire(&filesys_lock);
+    res = file_write(_fd->_file, buffer, size);
+    lock_release(&filesys_lock);
+  }
+  return (int)res;
 }
 
 static void
 sys_seek(int fd, unsigned position) {
-  // Todo
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Terminate if fd is not opened by the current thread. */
+  if (_fd == NULL)
+    sys_exit(-1);
+
+  lock_acquire(&filesys_lock);
+  file_seek(_fd->_file, position);
+  lock_release(&filesys_lock);
 }
 
 static unsigned
 sys_tell(int fd) {
-  // Todo
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Terminate if fd is not opened by the current thread. */
+  if (_fd == NULL)
+    sys_exit(-1);
+
+  lock_acquire(&filesys_lock);
+  unsigned res = file_tell(_fd->_file);
+  lock_release(&filesys_lock);
+  return res;
 }
 
 static void
 sys_close(int fd) {
-  // Todo
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Terminate if fd is not opened by the current thread. */
+  if (_fd == NULL)
+    sys_exit(-1);
+
+  lock_acquire(&filesys_lock);
+  file_close(_fd->_file);
+  lock_release(&filesys_lock);
+
+  list_remove(&(_fd->elem));
+  free(_fd);
 }
+/* Ruihang End */
