@@ -208,6 +208,7 @@ lock_acquire (struct lock *lock)
   }
   sema_down (&lock->semaphore);
   list_push_back(&current_thread->acquired_locks,&lock->elem);
+  current_thread->lock_waiting_for=NULL;
   lock->holder = current_thread;
 }
 
