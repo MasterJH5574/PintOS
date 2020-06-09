@@ -369,7 +369,7 @@ void thread_donate_priority(thread * thread1,int priority){
 }
 /* ZYH: calculate the new priority */
 void
-thread_priority_upd(thread* t) {
+thread_priority_upd(thread* t, void *args UNUSED) {
   if (t == idle_thread) return;
   t->priority = PRI_MAX - t->nice * 2 - 
     real2IntTrunc(realDivInt(t->rec_cpu, 4));
@@ -379,7 +379,7 @@ void
 thread_set_nice (int nice) 
 {
   thread_current()->nice = nice;
-  if (thread_mlfqs) thread_priority_upd(thread_current());
+  if (thread_mlfqs) thread_priority_upd(thread_current(), NULL);
 }
 
 /* Returns the current thread's nice value. */
@@ -416,11 +416,11 @@ thread_rec_cpu_inc(void) {
   thread* cur_th = thread_current();
   if (cur_th != idle_thread) 
     cur_th->rec_cpu = realAddInt(cur_th->rec_cpu, 1);
-  thread_priority_upd(cur_th);
+  thread_priority_upd(cur_th, NULL);
 }
 /* ZYH: update rec_cpu for running thread*/
 void
-thread_rec_cpu_upd(thread *t) {
+thread_rec_cpu_upd(thread *t, void *args UNUSED) {
   int tmp = thread_get_load_avg() << 1; //actually load_avg * 100
   t->rec_cpu = realAddInt(
     realMul(intDiv(tmp, tmp + 100), t->rec_cpu), 
@@ -433,6 +433,19 @@ thread_get_recent_cpu (void)
   return real2IntTrunc(realMulInt(thread_current()->rec_cpu, 100));
 }
 
+/* ZYH: update priority in each interrupt*/
+void thread_timer_interrupt(bool isSecond) {
+  if (thread_mlfqs) {
+    thread_rec_cpu_inc();
+    if (isSecond) {
+      thread_load_avg_upd();
+      thread_foreach(thread_rec_cpu_upd, NULL);
+      thread_foreach(thread_priority_upd, NULL);
+      //todo: sort ready list
+      //list_sort(&ready_list, , NULL);
+    }
+  }
+}
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -558,7 +571,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else {
-    list_lift_min(&ready_list,compare_prior,NULL);
+    list_lift_min(&ready_list, compare_prior, NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }

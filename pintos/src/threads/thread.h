@@ -143,11 +143,17 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 void thread_donate_priority(thread*,int);
+void thread_timer_interrupt(bool);
+void thread_priority_upd(thread* t, void *args UNUSED);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
+void thread_rec_cpu_inc(void);
+void thread_rec_cpu_upd(thread *t, void *args UNUSED);
+
 int thread_get_load_avg (void);
+void thread_load_avg_upd (void);
 
 bool compare_prior(const list_elem * thread1,const list_elem * thread2,void* aux);
 #endif /* threads/thread.h */

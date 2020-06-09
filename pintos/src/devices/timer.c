@@ -188,6 +188,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  thread_timer_interrupt(timer_ticks() %TIMER_FREQ == 0);
   for (list_elem *iter = list_begin(&sleeping_queue);
        iter != list_end(&sleeping_queue);) {
     list_elem* next=list_next(iter);
