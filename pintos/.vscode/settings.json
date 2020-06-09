@@ -101,5 +101,7 @@
         "${workspaceFolder}/src/misc",
         "${workspaceFolder}/src/threads",
         "${workspaceFolder}/src/utils",
-    ]
+    ],
+    "editor.tabSize": 2, 
+    "editor.detectIndentation": false
 }

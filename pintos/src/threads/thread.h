@@ -109,6 +109,7 @@ struct thread
     int orig_priority;
 
     int nice;
+    fixReal rec_cpu;
   };
   typedef struct thread thread;
 /* If false (default), use round-robin scheduler.

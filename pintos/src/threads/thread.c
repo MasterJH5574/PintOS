@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixReal.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -19,6 +20,9 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
+
+/* ZYH: load_avg for 4.4BSD*/
+static fixReal load_avg;
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -230,7 +234,7 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-bool compare_prior(const list_elem * elem1,const list_elem * elem2,void* aux){
+bool compare_prior(const list_elem * elem1,const list_elem * elem2,void* aux UNUSED){
     thread* thread1=list_entry(elem1,thread,elem);
     thread* thread2=list_entry(elem2,thread,elem);
     return thread1->priority>thread2->priority;
@@ -363,14 +367,19 @@ void thread_donate_priority(thread * thread1,int priority){
     cur=cur->lock_waiting_for;
   }
 }
+/* ZYH: calculate the new priority */
+void
+thread_priority_upd(thread* t) {
+  if (t == idle_thread) return;
+  t->priority = PRI_MAX - t->nice * 2 - 
+    real2IntTrunc(realDivInt(t->rec_cpu, 4));
+}
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice) 
 {
   thread_current()->nice = nice;
-  //todo: more
-  if (thread_mlfqs) {}
-  /* Not yet implemented. */
+  if (thread_mlfqs) thread_priority_upd(thread_current());
 }
 
 /* Returns the current thread's nice value. */
@@ -380,20 +389,48 @@ thread_get_nice (void)
   return thread_current()->nice;
 }
 
+/* ZYH: update load_avg */
+void
+thread_load_avg_upd (void) {
+  int ready_num = 0;
+  for (list_elem *e = list_begin(&ready_list); e != list_end(&ready_list); e = list_next(e))
+    //if (list_entry(e, thread, allelem) != idle_thread)
+    ++ready_num;
+  if (idle_thread->status == THREAD_READY) --ready_num;
+  load_avg = realDivInt(
+    realAddInt(
+      realMulInt(load_avg, 59), ready_num
+    ), 60
+  );
+}
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return real2IntRound(realMulInt(load_avg, 100));
 }
 
+/* ZYH: inc rec_cpu for running thread*/
+void 
+thread_rec_cpu_inc(void) {
+  thread* cur_th = thread_current();
+  if (cur_th != idle_thread) 
+    cur_th->rec_cpu = realAddInt(cur_th->rec_cpu, 1);
+  thread_priority_upd(cur_th);
+}
+/* ZYH: update rec_cpu for running thread*/
+void
+thread_rec_cpu_upd(thread *t) {
+  int tmp = thread_get_load_avg() << 1; //actually load_avg * 100
+  t->rec_cpu = realAddInt(
+    realMul(intDiv(tmp, tmp + 100), t->rec_cpu), 
+    t->nice);
+}
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return real2IntTrunc(realMulInt(thread_current()->rec_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -485,6 +522,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->orig_priority=priority;
   t->magic = THREAD_MAGIC;
 
+  if (thread_mlfqs) {
+    t->nice = 0;
+    t->rec_cpu = int2Real(0);
+    t->priority = PRI_MAX;
+  }
+  
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   list_init(&t->acquired_locks);
@@ -515,7 +558,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else {
-    list_sort(&ready_list,compare_prior,NULL);
+    list_lift_min(&ready_list,compare_prior,NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
