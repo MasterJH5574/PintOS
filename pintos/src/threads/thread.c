@@ -37,6 +37,10 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/* Jiaxin Begin: Lock used by exit*/
+static struct lock exit_lock;
+/*Jiaxin End*/
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -90,6 +94,9 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  /*Jiaxin Begin*/
+  lock_init (&exit_lock);
+  /*Jiaxin End*/
   list_init (&ready_list);
   list_init (&all_list);
 
@@ -284,8 +291,31 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+  /*Jiaxin Begin*/
+  //TODO: Release locks
+  
+  struct thread *cur_thread = thread_current();
+  //Continue the exit process of child threads
+  lock_acquire(&exit_lock);
+  struct list_elem *e;
 
-  // Todo
+  for (e = list_begin(&cur_thread->child_list); e != list_end(&cur_thread->child_list); e = list_next(e))
+  {
+    struct thread *child_thread = list_entry(e, struct thread, child_elem);
+    sema_up(&child_thread->exit_sem);
+  }
+  lock_release(&exit_lock);
+
+  sema_up(&cur_thread->waited_by_parent);
+
+  //Block until parent thread exit
+  if (cur_thread != initial_thread)
+    sema_down(&cur_thread->exit_sem);
+
+  //Do we still need acquire exit_lock?
+
+  list_remove(&cur_thread->child_elem);
+  /*Jiaxin End*/
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -477,6 +507,9 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->file_descriptors);
 
   list_init(&t->child_list);
+  if (t != initial_thread)
+    list_push_back(&thread_current()->child_list, &t->child_elem);
+
   sema_init(&t->waited_by_parent, 0);
   sema_init(&t->exit_sem, 0);
 #endif

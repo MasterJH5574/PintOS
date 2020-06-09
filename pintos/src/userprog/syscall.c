@@ -223,7 +223,16 @@ sys_halt() {
 static void
 sys_exit(int status) {
   struct thread *cur_thread = thread_current();
-  // Todo: free resources
+  /*Jiaxin Begin*/
+  //Free file resources
+  while (!list_empty(&cur_thread->file_descriptors))
+  {
+    struct list_elem *e = list_pop_front(&cur_thread->file_descriptors);
+    struct file_descriptor *fd = list_entry(e, struct file_descriptor, elem);
+    file_close(fd->_file);
+    free(fd);
+  }
+  /*Jiaxin End*/
   thread_current()->exit_code = status;
   thread_exit();
 }

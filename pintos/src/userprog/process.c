@@ -186,7 +186,8 @@ process_wait (tid_t child_tid UNUSED)
 void
 process_exit (void)
 {
-  // Todo
+  // Jiaxin: Nothing to add for usre_prog's sys_exit.
+
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
