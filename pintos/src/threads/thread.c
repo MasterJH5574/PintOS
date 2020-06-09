@@ -344,6 +344,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if (thread_mlfqs) return;
   thread_current()->orig_priority=new_priority;
   restore_priority(thread_current());
   if (!intr_context ()) {
@@ -441,8 +442,6 @@ void thread_timer_interrupt(bool isSecond) {
       thread_load_avg_upd();
       thread_foreach(thread_rec_cpu_upd, NULL);
       thread_foreach(thread_priority_upd, NULL);
-      //todo: sort ready list
-      //list_sort(&ready_list, , NULL);
     }
   }
 }
