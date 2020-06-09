@@ -104,7 +104,7 @@ sema_try_down (struct semaphore *sema)
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
-void
+void __attribute__((optimize("-O0")))
 sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
@@ -347,7 +347,7 @@ cond_wait (struct condition *cond, struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
    interrupt handler. */
-void
+void __attribute__((optimize("-O0")))
 cond_signal (struct condition *cond, struct lock *lock UNUSED) 
 {
   ASSERT (cond != NULL);
