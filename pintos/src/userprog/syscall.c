@@ -211,7 +211,9 @@ sys_exec(const char *cmd_line) {
 
 static int
 sys_wait(pid_t pid) {
-  // Todo
+  /*Jiaxin Begin*/
+  return process_wait(pid);
+  /*Jiaxin end*/
 }
 
 /* Ruihang Begin */

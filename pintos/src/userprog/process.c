@@ -154,6 +154,31 @@ start_process (void *start_info)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  /*Jiaxin Begin*/
+  if (list_empty(&thread_current()->child_list))
+  {
+    return -1;
+  }
+
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  struct thread *child_thread;
+  for (e = list_begin(&cur->child_list); e != list_end(&cur->child_list); e=list_next(e))
+  {
+    child_thread = list_entry(e, struct thread, child_elem);
+    if (child_thread->tid == child_tid)
+    {
+      list_remove(e);
+      //wait for child to exit
+      sema_down(&child_thread->waited_by_parent);
+      //get child's exit_code
+      int ret = &child_thread->exit_code;
+      //continue child's exit process
+      sema_up(&child_thread->exit_sem);
+      return ret;
+    }
+  }
+  /*Jiaxin End*/
   return -1;
 }
 

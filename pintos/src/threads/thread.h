@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <synch.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -104,6 +105,13 @@ struct thread
     /* Ruihang Begin: Below are some members used in /src/userprog/. */
     int exit_code;                    /* Return code of this thread. */
     /* Ruihang End */
+
+   /*Jiaxin Begin: Below are some members used in /src/userprog/process*/
+   struct list child_list;             //child threads
+   struct list_elem child_elem;
+   struct semaphore waited_by_parent;  //whether this thread is waited by its parent
+   struct semaphore exit_sem;          //whether could exit, controlled by its parent
+   /*Jiaxin End*/
   };
 
 /* If false (default), use round-robin scheduler.
