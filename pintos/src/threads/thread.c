@@ -365,8 +365,11 @@ void thread_donate_priority(thread * thread1,int priority){
 }
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice) 
 {
+  thread_current()->nice = nice;
+  //todo: more
+  if (thread_mlfqs) {}
   /* Not yet implemented. */
 }
 
@@ -374,8 +377,7 @@ thread_set_nice (int nice UNUSED)
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */

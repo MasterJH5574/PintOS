@@ -107,6 +107,8 @@ struct thread
     struct thread* lock_waiting_for;
     list acquired_locks;
     int orig_priority;
+
+    int nice;
   };
   typedef struct thread thread;
 /* If false (default), use round-robin scheduler.
