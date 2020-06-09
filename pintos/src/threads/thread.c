@@ -234,7 +234,7 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-bool compare_prior(const list_elem * elem1,const list_elem * elem2,void* aux UNUSED){
+bool NO_INLINE compare_prior(const list_elem * elem1,const list_elem * elem2,void* aux UNUSED){
     thread* thread1=list_entry(elem1,thread,elem);
     thread* thread2=list_entry(elem2,thread,elem);
     return thread1->priority>thread2->priority;
@@ -395,9 +395,9 @@ void
 thread_load_avg_upd (void) {
   int ready_num = 0;
   for (list_elem *e = list_begin(&ready_list); e != list_end(&ready_list); e = list_next(e))
-    //if (list_entry(e, thread, allelem) != idle_thread)
     ++ready_num;
-  if (idle_thread->status == THREAD_READY) --ready_num;
+  // if (idle_thread->status == THREAD_READY) --ready_num;
+  if (thread_current() != idle_thread) ++ready_num;
   load_avg = realDivInt(
     realAddInt(
       realMulInt(load_avg, 59), ready_num
@@ -564,7 +564,7 @@ alloc_frame (struct thread *t, size_t size)
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
    idle_thread. */
-static struct thread *
+static struct thread * __attribute__((optimize("-O0")))
 next_thread_to_run (void) 
 {
   if (list_empty (&ready_list))
