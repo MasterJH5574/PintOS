@@ -230,7 +230,7 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-bool compare_prior(const list_elem * elem1,const list_elem * elem2,void* aux){
+bool compare_prior(const list_elem * elem1,const list_elem * elem2,void* aux UNUSED){
     thread* thread1=list_entry(elem1,thread,elem);
     thread* thread2=list_entry(elem2,thread,elem);
     return thread1->priority>thread2->priority;
@@ -482,7 +482,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->orig_priority=priority;
   t->magic = THREAD_MAGIC;
-
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   list_init(&t->acquired_locks);
@@ -513,7 +512,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else {
-    list_sort(&ready_list,compare_prior,NULL);
+    list_lift_min(&ready_list,compare_prior,NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
