@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "make"
+        }, 
+        {
+            "label": "launch-pintos", 
+            "type": "shell", 
+            "command": "pintos", 
+            "args": ["--gdb"], 
+        }
+    ]
+}

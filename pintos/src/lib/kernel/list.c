@@ -251,6 +251,8 @@ list_remove (struct list_elem *elem)
   ASSERT (is_interior (elem));
   elem->prev->next = elem->next;
   elem->next->prev = elem->prev;
+//  elem->next=NULL;
+//  elem->prev=NULL;
   return elem->next;
 }
 
@@ -521,4 +523,10 @@ list_min (struct list *list, list_less_func *less, void *aux)
           min = e; 
     }
   return min;
+}
+
+void list_lift_min(list* list,list_less_func* less,void* aux){
+  list_elem * min=list_min(list,less,aux);
+  list_remove(min);
+  list_push_front(list,min);
 }

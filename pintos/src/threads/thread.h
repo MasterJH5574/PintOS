@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
+#include "fixReal.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -92,6 +94,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list_elem sleep_listelem;
+    int64_t wake_time;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -100,8 +104,15 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-  };
+    struct semaphore sleep;
+    struct thread* lock_waiting_for;
+    list acquired_locks;
+    int orig_priority;
 
+    int nice;
+    fixReal rec_cpu;
+  };
+  typedef struct thread thread;
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -132,10 +143,18 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+void thread_donate_priority(thread*,int);
+void thread_timer_interrupt(bool);
+void thread_priority_upd(thread* t, void *args UNUSED);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
-int thread_get_load_avg (void);
+void thread_rec_cpu_inc(void);
+void thread_rec_cpu_upd(thread *t, void *args UNUSED);
 
+int thread_get_load_avg (void);
+void thread_load_avg_upd (void);
+
+bool compare_prior(const list_elem * thread1,const list_elem * thread2,void* aux);
 #endif /* threads/thread.h */
