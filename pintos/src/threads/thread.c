@@ -652,7 +652,10 @@ thread_schedule_tail (struct thread *prev)
 
 #ifdef USERPROG
   /* Activate the new address space. */
-  process_activate ();
+
+  /* Ruihang Begin: If prev == NULL, then cur has NULL pagedir. */
+  if (prev != NULL)
+    process_activate ();
 #endif
 
   /* If the thread we switched from is dying, destroy its struct
