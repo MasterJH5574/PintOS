@@ -134,20 +134,20 @@ pintos_init (void)
     /* Run actions specified on kernel command line. */
     run_actions (argv);
   } else {
-      char command[256];
-      while(1){
-          printf("CS318>");
-          get_line(command,256);
-          
-          if (!strcmp(command , "whoami")) {
-              printf("mother fucker\n");
-          } else if (!strcmp(command , "exit")) {
-              
-              break;
-          } else {
-              printf("unknown command\n");
-          }
+    char command[256];
+    while(1){
+      printf("CS318>");
+      get_line(command, 256);
+
+      if (!strcmp(command, "whoami")) {
+        printf("Thinking philosopher\n");
+      } else if (!strcmp(command, "exit")) {
+
+        break;
+      } else {
+        printf("unknown command\n");
       }
+    }
     // TODO: no command line passed to kernel. Run interactively 
   }
 
