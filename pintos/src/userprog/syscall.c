@@ -3,9 +3,13 @@
 #include <syscall-nr.h>
 #include <threads/vaddr.h>
 #include <lib/user/syscall.h>
+#include <devices/shutdown.h>
+#include <filesys/filesys.h>
+#include <threads/synch.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "pagedir.h"
+#include "process.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -26,6 +30,12 @@ static void sys_seek(int fd, unsigned position);
 static unsigned sys_tell(int fd);
 static void sys_close(int fd);
 /* ------ Declarations of System Calls End ------ */
+
+
+/* File system lock to ensure that there is at most one system call related to
+ * file system at one time.
+ */
+struct lock filesys_lock;
 
 
 /* Check whether the address given by the user program which invoked a system
@@ -95,6 +105,9 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  /* Ruihang Begin */
+  lock_init(&filesys_lock);
+  /* Ruihang End */
 }
 
 
@@ -179,33 +192,45 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 static void
 sys_halt() {
-  // Todo
+  shutdown_power_off();
 }
 
 static void
 sys_exit(int status) {
-  // Todo
+  struct thread *cur_thread = thread_current();
+  // Todo: free resources
+  thread_current()->exit_code = status;
+  thread_exit();
 }
 
 static pid_t
 sys_exec(const char *cmd_line) {
-  // Todo
+  return process_execute(cmd_line);
 }
+/* Ruihang End */
 
 static int
 sys_wait(pid_t pid) {
   // Todo
 }
 
+/* Ruihang Begin */
 static bool
 sys_create(const char *file, unsigned initialize_size) {
-  // Todo
+  lock_acquire(&filesys_lock);
+  bool res = filesys_create(file, initialize_size);
+  lock_release(&filesys_lock);
+  return res;
 }
 
 static bool
 sys_remove(const char *file) {
-  // Todo
+  lock_acquire(&filesys_lock);
+  int res = filesys_remove(file);
+  lock_release(&filesys_lock);
+  return res;
 }
+/* Ruihang End */
 
 static int
 sys_open(const char* file) {
@@ -241,5 +266,3 @@ static void
 sys_close(int fd) {
   // Todo
 }
-
-/* Ruihang End */

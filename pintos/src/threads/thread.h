@@ -100,6 +100,10 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    /* Ruihang Begin: Below are some members used in /src/userprog/. */
+    int exit_code;                    /* Return code of this thread. */
+    /* Ruihang End */
   };
 
 /* If false (default), use round-robin scheduler.

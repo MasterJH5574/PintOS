@@ -45,28 +45,36 @@ process_execute (const char *file_name)
 
   /*Jiaxin: get thread_name*/
   char *thread_name, *save_ptr;
-  thread_name = strtok_r(name, " ", save_ptr);
-  
+  thread_name = strtok_r(name, " ", &save_ptr);
+
+  /* Ruihang Begin */
+  /* Parameter for start_process(). */
+  struct process_start_info *start_info = palloc_get_page(0);
+  start_info->file_name = fn_copy;
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, start_info);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
+  bool success = start_info->success;
   palloc_free_page(name);
-  return tid;
+  palloc_free_page(start_info);
+  return success ? tid : -1;
+  /* Ruihang End */
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *start_info)
 {
-  char *file_name = file_name_;
+  char *file_name = ((struct process_start_info *)start_info)->file_name;
   struct intr_frame if_;
   bool success;
 
   /*Jiaxin: get real thread_name*/
   char *token, *save_ptr;
-  token = strtok_r(file_name, " ", save_ptr);
+  token = strtok_r(file_name, " ", &save_ptr);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -81,9 +89,9 @@ start_process (void *file_name_)
     char* esp = if_.esp;
     int top = 0;
     char* args[256];
-    for (; token != NULL; token = strtok_r(NULL, " ", save_ptr))
+    for (; token != NULL; token = strtok_r(NULL, " ", &save_ptr))
     {
-      int len = strlen(token);
+      uint32_t len = strlen(token);
       esp -= len + 1;
       strlcpy(esp, token, len + 1);
       args[top++] = esp;
@@ -115,8 +123,14 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  /* Ruihang Begin */
+  if (!success) {
+    ((struct process_start_info *)start_info)->success = false;
+    thread_exit();
+  } else {
+    ((struct process_start_info *)start_info)->success = true;
+  }
+  /* Ruihang End */
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -147,6 +161,7 @@ process_wait (tid_t child_tid UNUSED)
 void
 process_exit (void)
 {
+  // Todo
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
