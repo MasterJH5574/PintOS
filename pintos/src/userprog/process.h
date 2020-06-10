@@ -9,6 +9,10 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
+/*Jiaxin Begin*/
+extern struct lock filesys_lock;
+/*Jiaxin End*/
+
 /* Ruihang Begin */
 /* Used as the parameter of start_process().
  * "success" means that whether the new process is successfully loaded.

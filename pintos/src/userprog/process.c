@@ -290,13 +290,20 @@ load (char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  /*Jiaxin Begin*/
+  lock_acquire (&filesys_lock);
+  /*Jiaxin End*/
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  /*Jiaxin Begin: desable write on executable file*/
+  file_deny_write (file);
+  /*Jiaxin End*/
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -381,7 +388,10 @@ load (char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
+  /*Jiaxin Begin*/
+  lock_release (&filesys_lock);
+  /*Jiaxin End*/
   return success;
 }
 
