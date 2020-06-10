@@ -335,6 +335,9 @@ thread_exit (void)
     sema_down(&cur_thread->exit_sem);
 
   //Do we still need acquire exit_lock?
+  //Yes, but why?
+  lock_acquire(&exit_lock);
+  lock_release(&exit_lock);
 
   if (cur_thread != initial_thread)
     list_remove(&cur_thread->child_elem);
