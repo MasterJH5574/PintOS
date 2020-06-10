@@ -304,6 +304,11 @@ thread_exit (void)
   /*Jiaxin Begin*/
   struct list_elem *e;
   struct thread *cur_thread = thread_current();
+  if (cur_thread->cur_file != NULL)
+  {
+    file_close(cur_thread->cur_file);
+    cur_thread->cur_file = NULL;
+  }
   /*Jiaxin End*/
 
   /* Ruihang Begin: release locks */

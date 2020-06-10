@@ -302,6 +302,7 @@ load (char *file_name, void (**eip) (void), void **esp)
     }
 
   /*Jiaxin Begin: desable write on executable file*/
+  t->cur_file = file;
   file_deny_write (file);
   /*Jiaxin End*/
 
