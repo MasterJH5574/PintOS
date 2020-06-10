@@ -82,9 +82,9 @@ get_syscall_number(struct intr_frame *f) {
 
 /* Check whether the parameters of a system call are all valid. */
 static void
-check_valid_syscall_args(void* syscall_args, int num) {
+check_valid_syscall_args(void** syscall_args, int num) {
   for (int i = 0; i < num; i++)
-    check_valid_user_addr(syscall_args + i, sizeof(uint32_t));
+    check_valid_user_addr(syscall_args[i], sizeof(uint32_t));
 }
 
 /* Check whether the address of the user string is valid. */
