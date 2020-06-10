@@ -51,6 +51,7 @@ get_file_descriptor(struct thread *_thread, int fd) {
                                     struct file_descriptor, elem);
     if (_fd->fd == fd)
       return _fd;
+    _elem = list_next(_elem);
   }
   return NULL;
 }

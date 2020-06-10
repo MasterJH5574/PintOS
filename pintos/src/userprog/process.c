@@ -511,7 +511,7 @@ setup_stack (void **esp, int argc, char *argv[])
         palloc_free_page (kpage);
     }
 
-  /*Jiaxin Begin*/
+  /*Jiaxin Begin: put arguments into stack*/
   if (success)
   {
     void *args[256];
