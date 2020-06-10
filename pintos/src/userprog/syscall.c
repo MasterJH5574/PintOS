@@ -234,6 +234,11 @@ sys_exit(int status) {
   }
   /*Jiaxin End*/
   thread_current()->exit_code = status;
+
+  /*Jiaxin Begin*/
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  /*Jiaxin End*/
+
   thread_exit();
 }
 

@@ -137,7 +137,7 @@ process_wait (tid_t child_tid UNUSED)
       //wait for child to exit
       sema_down(&child_thread->waited_by_parent);
       //get child's exit_code
-      int ret = &child_thread->exit_code;
+      int ret = child_thread->exit_code;
       //continue child's exit process
       sema_up(&child_thread->exit_sem);
       return ret;
