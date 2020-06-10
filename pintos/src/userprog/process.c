@@ -51,9 +51,12 @@ process_execute (const char *file_name)
   /* Parameter for start_process(). */
   struct process_start_info *start_info = palloc_get_page(0);
   start_info->file_name = fn_copy;
+  sema_init(&start_info->start_sema, 0);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, start_info);
+  sema_down(&start_info->start_sema);   /* Wait until start_process() finish. */
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   bool success = start_info->success;
@@ -83,7 +86,7 @@ start_process (void *start_info)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (token, &if_.eip, &if_.esp);
   
-  /*Jiaxin: only when success, parse the augument*/
+  /*Jiaxin: only when success, parse the argument*/
   if (success)
   {
     char* esp = if_.esp;
@@ -126,9 +129,11 @@ start_process (void *start_info)
   /* Ruihang Begin */
   if (!success) {
     ((struct process_start_info *)start_info)->success = false;
+    sema_up(&((struct process_start_info *)start_info)->start_sema);
     thread_exit();
   } else {
     ((struct process_start_info *)start_info)->success = true;
+    sema_up(&((struct process_start_info *)start_info)->start_sema);
   }
   /* Ruihang End */
 

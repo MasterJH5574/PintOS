@@ -302,14 +302,26 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
   /*Jiaxin Begin*/
-  //TODO: Release locks
-  
+  struct list_elem *e;
   struct thread *cur_thread = thread_current();
+  /*Jiaxin End*/
+
+  /* Ruihang Begin: release locks */
+  for (e = list_begin(&cur_thread->acquired_locks);
+       e != list_end(&cur_thread->acquired_locks);
+       e = list_next(e)) {
+    struct lock *_lock = list_entry(e, struct lock, elem);
+    lock_release(_lock);
+  }
+  /* Ruihang End */
+
+  /*Jiaxin Begin*/
   //Continue the exit process of child threads
   lock_acquire(&exit_lock);
-  struct list_elem *e;
 
-  for (e = list_begin(&cur_thread->child_list); e != list_end(&cur_thread->child_list); e = list_next(e))
+  for (e = list_begin(&cur_thread->child_list);
+       e != list_end(&cur_thread->child_list);
+       e = list_next(e))
   {
     struct thread *child_thread = list_entry(e, struct thread, child_elem);
     sema_up(&child_thread->exit_sem);
@@ -324,7 +336,8 @@ thread_exit (void)
 
   //Do we still need acquire exit_lock?
 
-  list_remove(&cur_thread->child_elem);
+  if (cur_thread != initial_thread)
+    list_remove(&cur_thread->child_elem);
   /*Jiaxin End*/
 #endif
 
