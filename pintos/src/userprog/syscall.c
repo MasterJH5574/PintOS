@@ -21,7 +21,7 @@ static void syscall_handler (struct intr_frame *);
 
 /* ------ Declarations of System Calls Begin ------ */
 static void sys_halt(void);
-static void sys_exit(int status);
+void sys_exit(int status);
 static pid_t sys_exec(const char *cmd_line);
 static int sys_wait(pid_t pid);
 static bool sys_create(const char *file, unsigned initialize_size);
@@ -221,7 +221,7 @@ sys_halt() {
   shutdown_power_off();
 }
 
-static void
+void
 sys_exit(int status) {
   struct thread *cur_thread = thread_current();
   /*Jiaxin Begin*/
