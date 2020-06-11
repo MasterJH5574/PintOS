@@ -2,6 +2,18 @@
 #define FILESYS_FILE_H
 
 #include "filesys/off_t.h"
+#include "kernel/list.h"
+
+/* Ruihang Begin: file descriptor */
+struct file_descriptor {
+  int fd;
+  char file_name[20];
+  struct file *_file;
+  struct thread *owner_thread;
+  struct list_elem elem;
+};
+/* Ruihang End */
+
 
 struct inode;
 

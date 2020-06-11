@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "synch.h"
 #include "fixReal.h"
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -100,6 +101,23 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
+    /* Ruihang Begin: Below are some members used in /src/userprog/. */
+    int exit_code;                      /* Return code of this thread. */
+
+    int fd_num;                         /* Number of file descriptors. */
+    struct list file_descriptors;       /* List of file descriptors. */
+    /* Ruihang End */
+
+    /*Jiaxin Begin: Below are some members used in /src/userprog/process*/
+    struct list child_list;             //child threads
+    struct list_elem child_elem;
+    struct semaphore waited_by_parent;  //whether this thread is waited by
+                                        //its parent
+    struct semaphore exit_sem;          //whether could exit, controlled by its
+                                        //parent
+    struct file *cur_file;              //current executable file
+    /*Jiaxin End*/
 #endif
 
     /* Owned by thread.c. */

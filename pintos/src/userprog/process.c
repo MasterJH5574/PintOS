@@ -19,7 +19,7 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (char *cmdline, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -29,7 +29,12 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  char *name;
   tid_t tid;
+
+  /*Jiaxin: reason as below*/
+  name = palloc_get_page(0);
+  strlcpy(name, file_name, PGSIZE);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -38,33 +43,59 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /*Jiaxin: get thread_name*/
+  char *thread_name, *save_ptr;
+  thread_name = strtok_r(name, " ", &save_ptr);
+
+  /* Ruihang Begin */
+  /* Parameter for start_process(). */
+  struct process_start_info *start_info = palloc_get_page(0);
+  start_info->file_name = fn_copy;
+  sema_init(&start_info->start_sema, 0);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, start_info);
+  sema_down(&start_info->start_sema);   /* Wait until start_process() finish. */
+
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-  return tid;
+    palloc_free_page (fn_copy);
+  bool success = start_info->success;
+  palloc_free_page(name);
+  palloc_free_page(start_info);
+  return success ? tid : -1;
+  /* Ruihang End */
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *start_info)
 {
-  char *file_name = file_name_;
+  char *file_name = ((struct process_start_info *)start_info)->file_name;
   struct intr_frame if_;
   bool success;
+
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  // success = load (token, &if_.eip, &if_.esp);
+  success = load(file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  /* Ruihang Begin */
+  if (!success) {
+    ((struct process_start_info *)start_info)->success = false;
+    sema_up(&((struct process_start_info *)start_info)->start_sema);
+    thread_exit();
+  } else {
+    ((struct process_start_info *)start_info)->success = true;
+    sema_up(&((struct process_start_info *)start_info)->start_sema);
+  }
+  /* Ruihang End */
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,6 +119,31 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  /*Jiaxin Begin*/
+  if (list_empty(&thread_current()->child_list))
+  {
+    return -1;
+  }
+
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+  struct thread *child_thread;
+  for (e = list_begin(&cur->child_list); e != list_end(&cur->child_list); e=list_next(e))
+  {
+    child_thread = list_entry(e, struct thread, child_elem);
+    if (child_thread->tid == child_tid)
+    {
+      list_remove(e);
+      //wait for child to exit
+      sema_down(&child_thread->waited_by_parent);
+      //get child's exit_code
+      int ret = child_thread->exit_code;
+      //continue child's exit process
+      sema_up(&child_thread->exit_sem);
+      return ret;
+    }
+  }
+  /*Jiaxin End*/
   return -1;
 }
 
@@ -95,6 +151,8 @@ process_wait (tid_t child_tid UNUSED)
 void
 process_exit (void)
 {
+  // Jiaxin: Nothing to add for usre_prog's sys_exit.
+
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
@@ -195,7 +253,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, int argc, char *argv[]);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -205,8 +263,8 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
-bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+bool __attribute__((optimize("-O0")))
+load (char *file_name, void (**eip) (void), void **esp) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -215,19 +273,38 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  /*Jiaxin Begin: Parse arguments*/
+  char *token, *save_ptr;
+  int argc = 0;
+  char *argv[64];
+  for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; 
+      token = strtok_r(NULL, " ", &save_ptr))
+      {
+        argv[argc++] = token;
+      }
+  /*Jiaxin End*/
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
 
+  /*Jiaxin Begin*/
+  lock_acquire (&filesys_lock);
+  /*Jiaxin End*/
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  /*Jiaxin Begin: desable write on executable file*/
+  t->cur_file = file;
+  file_deny_write (file);
+  /*Jiaxin End*/
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -302,7 +379,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, argc, argv))
     goto done;
 
   /* Start address. */
@@ -312,7 +389,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
+  /*Jiaxin Begin*/
+  lock_release (&filesys_lock);
+  /*Jiaxin End*/
   return success;
 }
 
@@ -427,7 +507,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, int argc, char *argv[]) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -441,7 +521,39 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+
+  /*Jiaxin Begin: put arguments into stack*/
+  if (success)
+  {
+    void *args[256];
+
+    for (int i = argc-1; i >= 0; --i)
+    {
+      uint8_t len = strlen(argv[i]);
+      *esp -= len + 1;
+      memcpy(*esp, argv[i], len + 1);
+      args[i] = *esp;
+    }
+
+    while (((unsigned int)*esp) % 4) -- (*esp);
+    
+    *esp -= 4;
+    *((void **) *esp) = 0;
+    *esp -= argc * 4;
+    memcpy(*esp, args, argc * 4);
+    void *old_esp = *esp;
+    *esp -= 4;
+    *((void **) * esp) = old_esp;
+
+    *esp -= 4;
+    *((int *) *esp) = argc;
+    
+    *esp -= 4;
+    *((int *) *esp) = 0;
+  }
+
   return success;
+  /*Jiaxin End*/
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
