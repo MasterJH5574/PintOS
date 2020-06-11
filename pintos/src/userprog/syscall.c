@@ -108,11 +108,6 @@ check_valid_user_string(const void *user_string) {
 /* Check whether the address of the user buffer is valid. */
 static void
 check_valid_user_buffer(const void *user_buffer, unsigned size) {
-  if (size == 0xfff) {
-    // The length of user_buffer is more than 4KB - a single page. Reject.
-    sys_exit(-1);
-  }
-
   for (const void *addr = user_buffer; addr < user_buffer + size; addr++)
     check_valid_user_addr(addr, sizeof(void));
 }
@@ -124,6 +119,7 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   /* Ruihang Begin */
+  printf("addr of filesys_lock = %x\n", (&filesys_lock));
   lock_init(&filesys_lock);
   /* Ruihang End */
 }
@@ -131,7 +127,7 @@ syscall_init (void)
 
 /* Ruihang Begin */
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f UNUSED)
 {
   uint32_t syscall_number = get_syscall_number(f);
   void* syscall_args[3] = {f->esp + 4, f->esp + 8, f->esp + 12};
@@ -177,9 +173,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 3);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
           *((unsigned *)syscall_args[2]));
-      /* Size to read is more than 4KB. Reject. */
-      if (*((unsigned *)syscall_args[2]) > 0x1000)
-        sys_exit(-1);
 
       f->eax = sys_read(*((int *)syscall_args[0]),
           *((void **)syscall_args[1]),
@@ -189,9 +182,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 3);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
                               *((unsigned *)syscall_args[2]));
-      /* Size to read is more than 4KB. Reject. */
-      if (*((unsigned *)syscall_args[2]) > 0x1000)
-        sys_exit(-1);
 
       f->eax = sys_write(*((int *)syscall_args[0]),
                         *((const void **)syscall_args[1]),
