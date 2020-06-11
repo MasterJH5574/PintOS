@@ -114,12 +114,11 @@ check_valid_user_buffer(const void *user_buffer, unsigned size) {
 
 /* Ruihang End */
 
-void
+void __attribute__((optimize("-O0")))
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   /* Ruihang Begin */
-  printf("addr of filesys_lock = %x\n", (&filesys_lock));
   lock_init(&filesys_lock);
   /* Ruihang End */
 }
