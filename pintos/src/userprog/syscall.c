@@ -129,6 +129,12 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
+#ifdef VM
+  /*Jiaxin Begin*/
+  thread_current()->esp =  f->esp;
+  /*Jiaxin End*/
+#endif
+
   uint32_t syscall_number = get_syscall_number(f);
   void* syscall_args[3] = {f->esp + 4, f->esp + 8, f->esp + 12};
 

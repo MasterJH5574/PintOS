@@ -3,6 +3,7 @@
 #include <userprog/pagedir.h>
 #include <threads/thread.h>
 #include <threads/malloc.h>
+#include <threads/vaddr.h>
 
 /* Ruihang Begin */
 static struct lock page_table_lock;
@@ -82,3 +83,33 @@ pte_find(page_table_t *page_table, void *user_page_number) {
   return elem != NULL ? hash_entry(elem, struct page_table_entry, elem) : NULL;
 }
 /* Ruihang End */
+
+/*Jiaxin Begin*/
+
+/*
+* Given a virtual address(page) and a hashtable, allocate a frame for this page,
+* return whether successful or not
+*/
+bool
+page_fault_handler(const void *fault_addr, bool write, void *esp)
+{
+  struct thread *cur = thread_current();
+  page_table_t *page_table = cur->page_table;
+  void *user_page_number = pg_round_down(fault_addr);
+
+  bool success = true;
+  struct page_table_entry *pte = pte_find(page_table, user_page_number);
+
+  lock_acquire(&page_table_lock);
+
+  ASSERT(is_user_vaddr(fault_addr));
+  ASSERT(!(pte != NULL && pte->status == FRAME));
+  
+  if (write == true && pte != NULL && pte->writable == false)
+    return false;
+
+  //A lot more && might need something from frame!
+
+  return success;
+}
+/*Jiaxin End*/

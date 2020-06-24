@@ -124,7 +124,9 @@ struct thread
     /* Ruihang Begin */
 #ifdef VM
     page_table_t page_table;            /* Supplemental page table. */
-
+    /*Jiaxin Begin*/
+    void *esp;                          /*Save esp of this thread*/
+    /*Jiaxin End*/
 #endif
     /* Ruihang End */
 
