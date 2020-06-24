@@ -3,6 +3,13 @@
 //
 
 #include "frame.h"
+#include "threads/synch.h"
+static struct lock mutex;
+
+void frame_free_frame(void* frame) {
+    lock_acquire(&mutex);
+    lock_free(&mutex);
+}
 
 unsigned hash_frame(const hash_elem* e, void* aux){
     frame_info* info=hash_entry(e,frame_info,elem);
