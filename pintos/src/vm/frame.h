@@ -10,7 +10,9 @@ struct frame_info{
     thread* thread_hold;
     void* page;
     void* frame;
+    struct hash_elem elem;
 };
+typedef struct frame_info frame_info;
 hash frame_table;
 
 void frame_init();
