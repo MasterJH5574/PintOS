@@ -2,6 +2,7 @@
 #define VM_PAGE_H
 
 #include <hash.h>
+#include <filesys/off_t.h>
 
 /* Ruihang Begin */
 typedef struct hash page_table_t;
@@ -15,18 +16,30 @@ enum page_status {
 
 struct page_table_entry {
   void *page_number;                      /* As the key of page table. */
-  void *frame_number;                     /* As the value of page table. */
-
   enum page_status status;                /* Show where the page is. */
 
-  // Todo: maybe some other members are needed.
+
+  void *frame_number;                     /* If status == FRAME. */
+
+  uint32_t swap_index;                    /* If status == SWAP. */
+  // Actually, "uint32_t" should be swap_index_t after implementing swap.
+
+  struct file *file;                      /* If status == FILE. */
+  off_t file_offset;
+  uint32_t read_bytes;
+  uint32_t zero_bytes;
+  bool writable;
+
+
+  // Todo: maybe this structure will be modified again and again.
 
   struct hash_elem elem;
 };
 
 
 /* Methods related to page table. */
-void page_table_init(page_table_t *page_table);
+bool page_table_init(page_table_t *page_table);
+void page_table_destroy(page_table_t *page_table);
 
 
 

@@ -320,6 +320,13 @@ thread_exit (void)
   }
   /* Ruihang End */
 
+  /* Ruihang Begin */
+#ifdef VM
+  /* Destroy pate_table. */
+  page_table_destroy(&cur_thread->page_table);
+#endif
+  /* Ruihang End */
+
   /*Jiaxin Begin*/
   //Continue the exit process of child threads
   lock_acquire(&exit_lock);
