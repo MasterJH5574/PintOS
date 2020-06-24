@@ -5,6 +5,13 @@
 #include <threads/malloc.h>
 
 /* Ruihang Begin */
+static struct lock page_table_lock;
+void
+page_table_lock_init() {
+  lock_init(&page_table_lock);
+}
+
+
 unsigned page_table_hash_hash_func(const struct hash_elem *e, void *aux);
 bool page_table_hash_less_func(const struct hash_elem *a,
                                const struct hash_elem *b,
@@ -61,4 +68,17 @@ page_table_entry_destroy(struct hash_elem *e, void *aux) {
   free(pte);
 }
 
+struct page_table_entry *
+pte_find(page_table_t *page_table, void *user_page_number) {
+  lock_acquire(&page_table_lock);
+  ASSERT(page_table != NULL)
+
+  struct page_table_entry key;
+  key.page_number = user_page_number;
+  struct hash_elem *elem = hash_find(page_table, &key.elem);
+
+  lock_release(&page_table_lock);
+
+  return elem != NULL ? hash_entry(elem, struct page_table_entry, elem) : NULL;
+}
 /* Ruihang End */

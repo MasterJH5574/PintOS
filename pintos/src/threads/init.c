@@ -121,6 +121,12 @@ pintos_init (void)
   serial_init_queue ();
   timer_calibrate ();
 
+  /* Ruihang Begin */
+#ifdef VM
+  page_table_lock_init();
+#endif
+  /* Ruihang End */
+
 #ifdef FILESYS
   /* Initialize file system. */
   ide_init ();

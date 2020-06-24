@@ -38,8 +38,12 @@ struct page_table_entry {
 
 
 /* Methods related to page table. */
+void page_table_lock_init(void);
+
 bool page_table_init(page_table_t *page_table);
 void page_table_destroy(page_table_t *page_table);
+struct page_table_entry *pte_find(page_table_t *page_table,
+                                  void *user_page_number);
 
 
 
