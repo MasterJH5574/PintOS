@@ -21,7 +21,7 @@ static void syscall_handler (struct intr_frame *);
 
 /* ------ Declarations of System Calls Begin ------ */
 static void sys_halt(void);
-static void sys_exit(int status);
+void sys_exit(int status);
 static pid_t sys_exec(const char *cmd_line);
 static int sys_wait(pid_t pid);
 static bool sys_create(const char *file, unsigned initialize_size);
@@ -51,6 +51,7 @@ get_file_descriptor(struct thread *_thread, int fd) {
                                     struct file_descriptor, elem);
     if (_fd->fd == fd)
       return _fd;
+    _elem = list_next(_elem);
   }
   return NULL;
 }
@@ -82,9 +83,9 @@ get_syscall_number(struct intr_frame *f) {
 
 /* Check whether the parameters of a system call are all valid. */
 static void
-check_valid_syscall_args(void* syscall_args, int num) {
+check_valid_syscall_args(void** syscall_args, int num) {
   for (int i = 0; i < num; i++)
-    check_valid_user_addr(syscall_args + i, sizeof(uint32_t));
+    check_valid_user_addr(syscall_args[i], sizeof(uint32_t));
 }
 
 /* Check whether the address of the user string is valid. */
@@ -107,18 +108,13 @@ check_valid_user_string(const void *user_string) {
 /* Check whether the address of the user buffer is valid. */
 static void
 check_valid_user_buffer(const void *user_buffer, unsigned size) {
-  if (size == 0xfff) {
-    // The length of user_buffer is more than 4KB - a single page. Reject.
-    sys_exit(-1);
-  }
-
   for (const void *addr = user_buffer; addr < user_buffer + size; addr++)
     check_valid_user_addr(addr, sizeof(void));
 }
 
 /* Ruihang End */
 
-void
+void __attribute__((optimize("-O0")))
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -130,7 +126,7 @@ syscall_init (void)
 
 /* Ruihang Begin */
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f UNUSED)
 {
   uint32_t syscall_number = get_syscall_number(f);
   void* syscall_args[3] = {f->esp + 4, f->esp + 8, f->esp + 12};
@@ -176,9 +172,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 3);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
           *((unsigned *)syscall_args[2]));
-      /* Size to read is more than 4KB. Reject. */
-      if (*((unsigned *)syscall_args[2]) > 0x1000)
-        sys_exit(-1);
 
       f->eax = sys_read(*((int *)syscall_args[0]),
           *((void **)syscall_args[1]),
@@ -188,9 +181,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 3);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
                               *((unsigned *)syscall_args[2]));
-      /* Size to read is more than 4KB. Reject. */
-      if (*((unsigned *)syscall_args[2]) > 0x1000)
-        sys_exit(-1);
 
       f->eax = sys_write(*((int *)syscall_args[0]),
                         *((const void **)syscall_args[1]),
@@ -220,7 +210,7 @@ sys_halt() {
   shutdown_power_off();
 }
 
-static void
+void
 sys_exit(int status) {
   struct thread *cur_thread = thread_current();
   /*Jiaxin Begin*/
@@ -234,6 +224,11 @@ sys_exit(int status) {
   }
   /*Jiaxin End*/
   thread_current()->exit_code = status;
+
+  /*Jiaxin Begin*/
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  /*Jiaxin End*/
+
   thread_exit();
 }
 

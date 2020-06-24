@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include "synch.h"
 #include "fixReal.h"
-#define USERPROG
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -116,6 +116,7 @@ struct thread
                                         //its parent
     struct semaphore exit_sem;          //whether could exit, controlled by its
                                         //parent
+    struct file *cur_file;              //current executable file
     /*Jiaxin End*/
 #endif
 
