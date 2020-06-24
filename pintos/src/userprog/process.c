@@ -75,6 +75,11 @@ start_process (void *start_info)
   struct intr_frame if_;
   bool success;
 
+  /* Ruihang Begin */
+#ifdef VM
+  page_table_init(&thread_current()->page_table);
+#endif
+  /* Ruihang End */
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
