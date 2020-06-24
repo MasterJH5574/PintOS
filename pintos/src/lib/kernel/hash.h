@@ -65,7 +65,7 @@ struct hash
     hash_less_func *less;       /* Comparison function. */
     void *aux;                  /* Auxiliary data for `hash' and `less'. */
   };
-
+typedef struct hash hash;
 /* A hash table iterator. */
 struct hash_iterator 
   {
