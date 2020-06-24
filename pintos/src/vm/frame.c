@@ -6,11 +6,6 @@
 static struct lock mutex;
 static hash frame_table;
 
-void frame_free_frame(void* frame) {
-    lock_acquire(&mutex);
-    lock_release(&mutex);
-}
-
 unsigned hash_frame(const hash_elem* e, void* aux){
     frame_info* info=hash_entry(e,frame_info,elem);
     return hash_int((int) info->frame);
@@ -39,7 +34,21 @@ void *frame_get_frame (enum palloc_flags flag,void *user_page) {
     new_info->page=user_page;
     new_info->thread_hold=thread_current();
     hash_insert(&frame_table,&new_info->elem);
-    
     lock_release(&mutex);
     return frame;
+}
+
+void frame_free_frame(void* frame) {
+    lock_acquire(&mutex);
+
+    struct frame_info tmp, *info;
+    struct hash_elem * elem;
+    tmp.frame = frame;
+    elem = hash_find(&frame_table, &tmp.elem);
+    if (elem == NULL) PANIC("invalid frame to free");
+    info = hash_entry(elem, struct frame_info, elem);
+    hash_delete(&frame_table, &info->elem);
+    free(info);
+    palloc_free_page(frame);
+    lock_release(&mutex);
 }
