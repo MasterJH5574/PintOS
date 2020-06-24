@@ -13,7 +13,7 @@ void frame_free_frame(void* frame) {
 
 unsigned hash_frame(const hash_elem* e, void* aux){
     frame_info* info=hash_entry(e,frame_info,elem);
-    return info->frame;
+    return hash_int((int) info->frame);
 }
 
 bool hash_frame_less(const hash_elem* a,const hash_elem* b, void * aux){
