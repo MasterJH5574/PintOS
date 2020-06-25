@@ -68,7 +68,7 @@ check_valid_user_addr(const void *user_addr, uint32_t size) {
     if (!addr
      || !is_user_vaddr(addr)
      || pte_find(&thread_current()->page_table,
-                 pg_round_down(user_addr)) == NULL) {
+                 pg_round_down(user_addr), false) == NULL) {
       sys_exit(-1);
       return;
     }

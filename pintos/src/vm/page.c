@@ -19,8 +19,10 @@ bool page_table_hash_less_func(const struct hash_elem *a,
                                void *aux);
 void page_table_entry_destroy(struct hash_elem *e, void *aux);
 
+bool is_stack_access(const void *vaddr, const void *esp);
 
-/* Initialize page table. */
+
+/* Initialize supplemental page table. */
 bool
 page_table_init(page_table_t *page_table) {
   return hash_init(page_table,
@@ -29,32 +31,32 @@ page_table_init(page_table_t *page_table) {
                    NULL);
 }
 
-/* Destroy the page table in thread_exit(). */
+/* Destroy the supplemental page table in thread_exit(). */
 void
 page_table_destroy(page_table_t *page_table) {
   hash_destroy(page_table, page_table_entry_destroy);
 }
 
-/* Hash hash function of page table. (type hash_hash_func) */
+/* Hash hash function of supplemental page table. (type hash_hash_func) */
 unsigned
-page_table_hash_hash_func(const struct hash_elem *e, void *aux) {
+page_table_hash_hash_func(const struct hash_elem *e, void *aux UNUSED) {
   struct page_table_entry *pte = hash_entry(e, struct page_table_entry, elem);
   return hash_int((int) pte->page_number);
 }
 
-/* Hash less function of page table. (type hash_less_func) */
+/* Hash less function of supplemental page table. (type hash_less_func) */
 bool
 page_table_hash_less_func(const struct hash_elem *a,
                           const struct hash_elem *b,
-                          void *aux) {
+                          void *aux UNUSED) {
   struct page_table_entry *pte_a = hash_entry(a, struct page_table_entry, elem);
   struct page_table_entry *pte_b = hash_entry(b, struct page_table_entry, elem);
   return pte_a->page_number < pte_b->page_number;
 }
 
-/* Destroy page table entry. */
+/* Destroy supplemental page table entry. */
 void
-page_table_entry_destroy(struct hash_elem *e, void *aux) {
+page_table_entry_destroy(struct hash_elem *e, void *aux UNUSED) {
   struct page_table_entry *pte = hash_entry(e, struct page_table_entry, elem);
   if (pte->status == FRAME) {
     pagedir_clear_page(thread_current()->pagedir, pte->page_number);
@@ -69,16 +71,19 @@ page_table_entry_destroy(struct hash_elem *e, void *aux) {
   free(pte);
 }
 
+/* Find the spte of user_page_number in page_table. */
 struct page_table_entry *
-pte_find(page_table_t *page_table, void *user_page_number) {
-  lock_acquire(&page_table_lock);
+pte_find(page_table_t *page_table, void *user_page_number, bool locked) {
+  if (!locked)
+    lock_acquire(&page_table_lock);
   ASSERT(page_table != NULL)
 
   struct page_table_entry key;
   key.page_number = user_page_number;
   struct hash_elem *elem = hash_find(page_table, &key.elem);
 
-  lock_release(&page_table_lock);
+  if (!locked)
+    lock_release(&page_table_lock);
 
   return elem != NULL ? hash_entry(elem, struct page_table_entry, elem) : NULL;
 }
@@ -93,23 +98,57 @@ pte_find(page_table_t *page_table, void *user_page_number) {
 bool
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
+  ASSERT(is_user_vaddr(fault_addr))
+
   struct thread *cur = thread_current();
-  page_table_t *page_table = cur->page_table;
+  page_table_t *page_table = &cur->page_table;
   void *user_page_number = pg_round_down(fault_addr);
 
   bool success = true;
-  struct page_table_entry *pte = pte_find(page_table, user_page_number);
-
   lock_acquire(&page_table_lock);
 
-  ASSERT(is_user_vaddr(fault_addr));
-  ASSERT(!(pte != NULL && pte->status == FRAME));
-  
+  struct page_table_entry *pte = pte_find(page_table, user_page_number, true);
+  ASSERT(!(pte != NULL && pte->status == FRAME))
+
+  /* If the page is read-only, return false. */
   if (write == true && pte != NULL && pte->writable == false)
     return false;
 
   //A lot more && might need something from frame!
 
+  /* Ruihang Begin */
+  if (is_stack_access(fault_addr, esp)) {
+    /* The access to fault_addr is a stack access. */
+    /* Maybe need to perform some stack-growth? */
+    // Todo
+  } else {
+    /* The access to fault_addr is not a stack access. */
+    /* Only pte != NULL can be handled. Otherwise success = false. */
+    if (pte != NULL) {
+      /* Note that pte->status != FRAME by the assertion above. */
+      if (pte->status == SWAP) {
+        // Todo
+      } else if (pte->status == FILE) {
+        // Todo
+      } else
+        ASSERT(false)
+    } // else success = false
+  }
+  /* Ruihang End */
+
+  // Todo
+
   return success;
 }
 /*Jiaxin End*/
+
+/* Ruihang Begin */
+bool
+is_stack_access(const void *vaddr, const void *esp) {
+  /* The 80x86 PUSH instruction checks access permissions before it adjusts
+   * the stack pointer, so it may cause a page fault 4 bytes below the
+   * stack pointer.                           ------5.3.3 Stack Growth
+   */
+  return vaddr >= esp - 4 * 8;
+}
+/* Ruihang End */

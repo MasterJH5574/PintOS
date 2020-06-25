@@ -155,7 +155,7 @@ page_fault (struct intr_frame *f)
   {
     return;
   } else {
-    thread_exit();
+    sys_exit(-1);
   }
   /*Jiaxin End*/
 #endif

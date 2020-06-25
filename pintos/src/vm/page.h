@@ -20,6 +20,7 @@ struct page_table_entry {
 
 
   void *frame_number;                     /* If status == FRAME. */
+  bool writable;
 
   uint32_t swap_index;                    /* If status == SWAP. */
   // Actually, "uint32_t" should be swap_index_t after implementing swap.
@@ -28,7 +29,6 @@ struct page_table_entry {
   off_t file_offset;
   uint32_t read_bytes;
   uint32_t zero_bytes;
-  bool writable;
 
 
   // Todo: maybe this structure will be modified again and again.
@@ -43,8 +43,10 @@ void page_table_lock_init(void);
 bool page_table_init(page_table_t *page_table);
 void page_table_destroy(page_table_t *page_table);
 struct page_table_entry *pte_find(page_table_t *page_table,
-                                  void *user_page_number);
+                                  void *user_page_number,
+                                  bool locked);
 
+bool page_fault_handler(const void *fault_addr, bool write, void *esp);
 
 
 /* Ruihang End */
