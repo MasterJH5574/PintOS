@@ -145,6 +145,7 @@ pte_find(page_table_t *page_table, void *upage, bool locked) {
 bool
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
+  PANIC("Panic in page_fault_handler.");
   ASSERT(is_user_vaddr(fault_addr))
 
   struct thread *cur = thread_current();

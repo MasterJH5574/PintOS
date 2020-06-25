@@ -300,7 +300,6 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
   /*Jiaxin Begin*/
   struct list_elem *e;
   struct thread *cur_thread = thread_current();
@@ -354,6 +353,8 @@ thread_exit (void)
   if (cur_thread != initial_thread)
     list_remove(&cur_thread->child_elem);
   /*Jiaxin End*/
+
+  process_exit ();
 #endif
 
   /* Remove thread from all threads list, set our status to dying,

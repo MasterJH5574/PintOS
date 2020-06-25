@@ -17,7 +17,7 @@ struct frame_info{
 typedef struct frame_info frame_info;
 
 
-void frame_init();
+void frame_init(void);
 void* frame_get_frame(enum palloc_flags flag, void* user_page);
 void frame_free_frame(void* frame);
 
