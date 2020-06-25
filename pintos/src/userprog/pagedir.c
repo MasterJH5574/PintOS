@@ -44,8 +44,7 @@ pagedir_destroy (uint32_t *pd)
           if (*pte & PTE_P)
             #ifdef VM
               frame_free_frame(pte_get_page (*pte));
-            #endif
-            #ifndef VM
+            #else
               palloc_free_page (pte_get_page (*pte));
             #endif
             

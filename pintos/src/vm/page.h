@@ -15,11 +15,11 @@ enum page_status {
 };
 
 struct page_table_entry {
-  void *page_number;                      /* As the key of page table. */
+  void *upage;                      /* As the key of page table. */
   enum page_status status;                /* Show where the page is. */
 
 
-  void *frame_number;                     /* If status == FRAME. */
+  void *frame;                     /* If status == FRAME. */
   bool writable;
 
   uint32_t swap_index;                    /* If status == SWAP. */
@@ -42,6 +42,7 @@ void page_table_lock_init(void);
 
 bool page_table_init(page_table_t *page_table);
 void page_table_destroy(page_table_t *page_table);
+bool page_table_set_page(void *upage, void *kpage, bool writable);
 struct page_table_entry *pte_find(page_table_t *page_table,
                                   void *user_page_number,
                                   bool locked);
