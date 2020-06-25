@@ -7,7 +7,7 @@
 
 /* Ruihang Begin */
 static struct lock page_table_lock;
-void
+void __attribute__((optimize("-O0")))
 page_table_lock_init() {
   lock_init(&page_table_lock);
 }
@@ -104,7 +104,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   page_table_t *page_table = &cur->page_table;
   void *user_page_number = pg_round_down(fault_addr);
 
-  bool success = true;
+  bool success = false;
   lock_acquire(&page_table_lock);
 
   struct page_table_entry *pte = pte_find(page_table, user_page_number, true);
