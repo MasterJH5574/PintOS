@@ -67,7 +67,8 @@ check_valid_user_addr(const void *user_addr, uint32_t size) {
   for (const void *addr = user_addr; addr < user_addr + size; addr++) {
     if (!addr
      || !is_user_vaddr(addr)
-     || pagedir_get_page(thread_current()->pagedir, addr) == NULL) {
+     || pte_find(&thread_current()->page_table,
+                 pg_round_down(user_addr), false) == NULL) {
       sys_exit(-1);
       return;
     }
@@ -128,6 +129,12 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
+#ifdef VM
+  /*Jiaxin Begin*/
+  thread_current()->esp =  f->esp;
+  /*Jiaxin End*/
+#endif
+
   uint32_t syscall_number = get_syscall_number(f);
   void* syscall_args[3] = {f->esp + 4, f->esp + 8, f->esp + 12};
 
