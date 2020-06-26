@@ -44,7 +44,6 @@ static bool is_valid_user_addr(void *addr);
 /* File system lock to ensure that there is at most one system call related to
  * file system at one time.
  */
-struct lock filesys_lock;
 
 
 /* Get the struct file_descriptor of struct thread _thread. */
@@ -214,6 +213,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MMAP:
       check_valid_syscall_args(syscall_args, 2);
       sys_mmap(*((int *)syscall_args[0]), *((void **)syscall_args[1]));
+      break;
+    case SYS_MUNMAP:
+      check_valid_syscall_args(syscall_args, 1);
+      sys_munmap(*((mapid_t *)syscall_args[1]));
       break;
     default:
       // Todo: implement more in project 4
@@ -427,14 +430,18 @@ sys_mmap(int fd, void *addr) {
     return -1;
 
   /* If the file has 0 length, fail. */
+  lock_acquire(&filesys_lock);
   int len = file_length(_fd->_file);
+  lock_release(&filesys_lock);
   if (len == 0)
     return -1;
 
   /* You should use the file_reopen function to obtain a separate and
    * independent reference to the file for each of its mappings.  ------5.3.4
    */
+  lock_acquire(&filesys_lock);
   struct file *file = file_reopen(_fd->_file);
+  lock_release(&filesys_lock);
   off_t ofs = 0;
   uint32_t read_bytes = len;
 
@@ -475,7 +482,7 @@ sys_mmap(int fd, void *addr) {
 
 static void
 sys_munmap(mapid_t mapping) {
-  // Todo
+  page_table_remove_mmap(&thread_current()->mmap_descriptors, mapping);
 }
 
 

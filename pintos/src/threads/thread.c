@@ -323,6 +323,9 @@ thread_exit (void)
 #ifdef VM
   /* Destroy pate_table. */
   page_table_destroy(&cur_thread->page_table);
+  /* Unmap all mmaped files. */
+  for (int i = 0; i < cur_thread->md_num; i++)
+    page_table_remove_mmap(&cur_thread->mmap_descriptors, i);
 #endif
   /* Ruihang End */
 

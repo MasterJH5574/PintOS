@@ -1,8 +1,8 @@
 #include "page.h"
 #include "frame.h"
-#include <lib/debug.h>
-#include <userprog/pagedir.h>
-#include <threads/vaddr.h>
+#include "userprog/pagedir.h"
+#include "userprog/syscall.h"
+#include "threads/vaddr.h"
 
 /* Ruihang Begin */
 static struct lock page_table_lock;
@@ -118,6 +118,13 @@ page_table_set_page(void *upage, void *kpage, bool writable) {
   return success;
 }
 
+/* Remove the page/pte from supplemental page table. And then free PTE. */
+void
+page_table_remove_page(struct page_table_entry *pte) {
+  hash_delete(&thread_current()->page_table, &pte->elem);
+  free(pte);
+}
+
 /* Find the spte of UPAGE in page_table. Return NULL if upage not found. */
 struct page_table_entry *
 pte_find(page_table_t *page_table, void *upage, bool locked) {
@@ -138,7 +145,8 @@ pte_find(page_table_t *page_table, void *upage, bool locked) {
 }
 
 /* Map a page from file to user address UPAGE. */
-bool page_table_map_file_page(struct file *file,
+bool
+page_table_map_file_page(struct file *file,
                               off_t ofs,
                               uint32_t *upage,
                               uint32_t read_bytes,
@@ -169,6 +177,59 @@ bool page_table_map_file_page(struct file *file,
    * not be NULL, which means the insertion failed.
    */
   return hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
+}
+
+void
+page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
+  struct list_elem *e, *next;
+  struct file *file_to_close = NULL;
+  uint32_t *pagedir = thread_current()->pagedir;
+
+  for (e = list_begin(mmap_descriptors);
+        e != list_end(mmap_descriptors);
+        e = next) {
+    next = list_next(e);
+    struct mmap_descriptor *md = list_entry(e, struct mmap_descriptor, elem);
+    if (md->mapid != mapping)
+      continue;
+
+    ASSERT(md->pte->file != NULL)
+    /* If FILE_TO_CLOSE is not set, set it so that it can ba closed later. */
+    if (file_to_close == NULL)
+      file_to_close = md->pte->file;
+    else
+      ASSERT(md->pte->file == file_to_close)
+
+    /* If the corresponding page is in memory, check whether write-back
+     * is needed.
+     */
+    if (md->pte->status == FRAME) {
+      /* Write back into file if the page is dirty. */
+      if (pagedir_is_dirty(pagedir, md->pte->upage)) {
+        lock_acquire(&filesys_lock);
+        file_write_at(md->pte->file, md->pte->upage,
+                      md->pte->read_bytes, md->pte->file_offset);
+        lock_release(&filesys_lock);
+      }
+      /* Release the page from page table. */
+      frame_free_frame(md->pte->frame);
+      pagedir_clear_page(pagedir, md->pte->upage);
+    }
+
+    /* Remove the page from supplemental page table. */
+    page_table_remove_page(md->pte);
+    list_remove(e);
+
+    /* The mmap descriptor MD is no longer needed. Free it. */
+    free(md);
+  }
+
+
+  /* Close the re-opened file of mmap. */
+  lock_acquire(&filesys_lock);
+  if (file_to_close != NULL)
+    file_close(file_to_close);
+  lock_release(&filesys_lock);
 }
 /* Ruihang End */
 

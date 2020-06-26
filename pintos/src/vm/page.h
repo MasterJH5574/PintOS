@@ -51,6 +51,7 @@ void page_table_lock_init(void);
 bool page_table_init(page_table_t *page_table);
 void page_table_destroy(page_table_t *page_table);
 bool page_table_set_page(void *upage, void *kpage, bool writable);
+void page_table_remove_page(struct page_table_entry *pte);
 struct page_table_entry *pte_find(page_table_t *page_table,
                                   void *upage,
                                   bool locked);
@@ -61,6 +62,7 @@ bool page_table_map_file_page(struct file *file,
                               uint32_t read_bytes,
                               uint32_t zero_bytes,
                               bool writable);
+void page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping);
 
 bool page_fault_handler(const void *fault_addr, bool write, void *esp);
 
