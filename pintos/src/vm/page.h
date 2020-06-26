@@ -3,6 +3,7 @@
 
 #include <hash.h>
 #include <filesys/off_t.h>
+#include <devices/block.h>
 
 /* Ruihang Begin */
 typedef struct hash page_table_t;
@@ -23,8 +24,7 @@ struct page_table_entry {
 
   void *frame;                            /* If status == FRAME. */
 
-  uint32_t swap_index;                    /* If status == SWAP. */
-  // Actually, "uint32_t" should be swap_index_t after implementing swap.
+  block_sector_t swap_index;              /* If status == SWAP. */
 
   struct file *file;                      /* If status == FILE. */
   off_t file_offset;
@@ -62,6 +62,7 @@ bool page_table_map_file_page(struct file *file,
                               uint32_t read_bytes,
                               uint32_t zero_bytes,
                               bool writable);
+bool page_table_mmap_read_file(struct page_table_entry *pte, void *kpage);
 void page_table_mmap_write_back(struct page_table_entry *pte);
 void page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping);
 

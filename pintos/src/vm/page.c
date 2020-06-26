@@ -1,8 +1,10 @@
 #include "page.h"
 #include "frame.h"
+#include <string.h>
 #include "userprog/pagedir.h"
 #include "userprog/syscall.h"
 #include "threads/vaddr.h"
+#include "swap.h"
 
 /* Ruihang Begin */
 static struct lock page_table_lock;
@@ -179,6 +181,29 @@ page_table_map_file_page(struct file *file,
   return hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
 }
 
+/* Read a page from file to KPAGE.
+ * Return true if read success. Otherwise return false.
+ */
+bool page_table_mmap_read_file(struct page_table_entry *pte, void *kpage) {
+  struct file *file = pte->file;
+  off_t ofs = pte->file_offset;
+  uint32_t read_bytes = pte->read_bytes;
+  uint32_t zero_bytes = pte->zero_bytes;
+
+  lock_acquire(&filesys_lock);
+  off_t read_bytes_real = file_read_at(file, kpage, read_bytes, ofs);
+  lock_release(&filesys_lock);
+
+  /* If the actual read bytes != read_bytes, fail.
+   * But will this happen & when will this happen?
+   */
+  if (read_bytes_real != (off_t) read_bytes)
+    return false;
+
+  memset(kpage + read_bytes, 0, zero_bytes);
+  return true;
+}
+
 /* Write back in-frame page back into mmapped file. */
 void
 page_table_mmap_write_back(struct page_table_entry *pte) {
@@ -258,13 +283,13 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
 
   struct thread *cur = thread_current();
   page_table_t *page_table = &cur->page_table;
-  void *user_page_number = pg_round_down(fault_addr);
+  void *upage = pg_round_down(fault_addr);
   void *introduced = NULL;
 
   bool success = false;
   lock_acquire(&page_table_lock);
 
-  struct page_table_entry *pte = pte_find(page_table, user_page_number, true);
+  struct page_table_entry *pte = pte_find(page_table, upage, true);
   ASSERT(!(pte != NULL && pte->status == FRAME))
 
   /* If the page is read-only, return false. */
@@ -278,27 +303,36 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
     /* The access to fault_addr is a stack access. */
     /* ZYHowell: handle stack-growth*/
     if (pte != NULL) {
+      /* The page already exists. Load it from SWAP. */
       if (pte->status != SWAP) success = false;
-      introduced = frame_get_frame(0, user_page_number);
+      introduced = frame_get_frame(0, upage);
       if (introduced == NULL) success = false;
       else {
-        //TODO: some command of swap here. 
+        /* Ruihang Begin */
+        success = true;
+        swap_load(pte->swap_index, introduced);
+        pte->status = FRAME;
+        pte->frame = introduced;
+        pte->swap_index = 0;
+        /* Ruihang End */
       }
     } else {
-      introduced = frame_get_frame(0, user_page_number);
+      /* The page does not exist before. Perform stack growth. */
+      introduced = frame_get_frame(0, upage);
       if (introduced == NULL) success = false;
       else {
-        struct page_table_entry *tmp = malloc(sizeof(struct page_table_entry));
-        tmp->upage = user_page_number;
-        tmp->status = FRAME;
-        tmp->frame = introduced;
-        tmp->writable = true;
-        tmp->frame = NULL;
-        tmp->swap_index = 0;
-        tmp->file = NULL;
-        tmp->file_offset = 0;
-        tmp->read_bytes = tmp->zero_bytes = 0;
-        hash_insert(page_table, &tmp->elem);
+        success = true;
+        pte = malloc(sizeof(struct page_table_entry));
+        pte->upage = upage;
+        pte->status = FRAME;
+        pte->frame = introduced;
+        pte->writable = true;
+        pte->frame = NULL;
+        pte->swap_index = 0;
+        pte->file = NULL;
+        pte->file_offset = 0;
+        pte->read_bytes = pte->zero_bytes = 0;
+        hash_insert(page_table, &pte->elem);
       }
     }
   } else {
@@ -307,16 +341,40 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
     if (pte != NULL) {
       /* Note that pte->status != FRAME by the assertion above. */
       if (pte->status == SWAP) {
-        // Todo
+        /* Load the page from SWAP. */
+        introduced = frame_get_frame(0, upage);
+        if (introduced == NULL)
+          success = false;
+        else {
+          success = true;
+          swap_load(pte->swap_index, introduced);
+          pte->status = FRAME;
+          pte->frame = introduced;
+          pte->swap_index = 0;
+        }
       } else if (pte->status == FILE) {
-        // Todo
+        /* Read the page from mmapped file. */
+        introduced = frame_get_frame(0, upage);
+        if (introduced == NULL)
+          success = false;
+        else {
+          success = true;
+          page_table_mmap_read_file(pte, introduced);
+          pte->status = FRAME;
+          pte->frame = introduced;
+        }
       } else
         ASSERT(false)
     } // else success = false
   }
   /* Ruihang End */
 
-  // Todo
+  lock_release(&page_table_lock);
+  if (success) {
+    bool pagedir_set_result = pagedir_set_page(cur->pagedir, pte->upage,
+                                               pte->frame, pte->writable);
+    ASSERT(pagedir_set_result)
+  }
 
   return success;
 }
