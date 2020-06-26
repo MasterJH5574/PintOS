@@ -52,3 +52,5 @@ void frame_free_frame(void* frame) {
     palloc_free_page(frame);
     lock_release(&mutex);
 }
+
+/* ZYHowell: eviction algorithm: */

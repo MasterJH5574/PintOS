@@ -151,6 +151,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   struct thread *cur = thread_current();
   page_table_t *page_table = &cur->page_table;
   void *user_page_number = pg_round_down(fault_addr);
+  void *introduced = NULL;
 
   bool success = false;
   lock_acquire(&page_table_lock);
@@ -167,8 +168,27 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   /* Ruihang Begin */
   if (is_stack_access(fault_addr, esp)) {
     /* The access to fault_addr is a stack access. */
-    /* Maybe need to perform some stack-growth? */
-    // Todo
+    /* ZYHowell: handle stack-growth*/
+    if (pte != NULL) {
+      if (pte->status != SWAP) success = false;
+      introduced = frame_get_frame(0, user_page_number);
+      if (introduced == NULL) success = false;
+      else {
+        //TODO: some command of swap here. 
+      }
+    } else {
+      introduced = frame_get_frame(0, user_page_number);
+      if (introduced == NULL) success = false;
+      else {
+        struct page_table_entry *tmp = malloc(sizeof(struct page_table_entry));
+        memset(tmp, 0, sizeof(struct page_table_entry));
+        tmp->upage = user_page_number;
+        tmp->status = FRAME;
+        tmp->frame = introduced; 
+        tmp->writable = true;
+        hash_insert(page_table, &tmp->elem);
+      }
+    }
   } else {
     /* The access to fault_addr is not a stack access. */
     /* Only pte != NULL can be handled. Otherwise success = false. */
