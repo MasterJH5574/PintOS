@@ -179,6 +179,23 @@ page_table_map_file_page(struct file *file,
   return hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
 }
 
+/* Write back in-frame page back into mmapped file. */
+void
+page_table_mmap_write_back(struct page_table_entry *pte) {
+  ASSERT(pte->status == FRAME)            /* The page is now in memory. */
+  ASSERT(pte->file != NULL)               /* The page is a mmapped page. */
+  uint32_t *pagedir = thread_current()->pagedir;
+
+  /* If the page is clean, just return. */
+  if (!pagedir_is_dirty(pagedir, pte->upage))
+    return;
+
+  lock_acquire(&filesys_lock);
+  file_write_at(pte->file, pte->upage, pte->read_bytes, pte->file_offset);
+  lock_release(&filesys_lock);
+}
+
+/* Remove mmapped pages designated by MAPPING  from supplemental page table. */
 void
 page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
   struct list_elem *e, *next;
@@ -204,13 +221,8 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
      * is needed.
      */
     if (md->pte->status == FRAME) {
-      /* Write back into file if the page is dirty. */
-      if (pagedir_is_dirty(pagedir, md->pte->upage)) {
-        lock_acquire(&filesys_lock);
-        file_write_at(md->pte->file, md->pte->upage,
-                      md->pte->read_bytes, md->pte->file_offset);
-        lock_release(&filesys_lock);
-      }
+      /* Write back to mmapped file. */
+      page_table_mmap_write_back(md->pte);
       /* Release the page from page table. */
       frame_free_frame(md->pte->frame);
       pagedir_clear_page(pagedir, md->pte->upage);
@@ -242,7 +254,6 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
 bool
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
-  PANIC("Panic in page_fault_handler.");
   ASSERT(is_user_vaddr(fault_addr))
 
   struct thread *cur = thread_current();
@@ -278,11 +289,15 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
       if (introduced == NULL) success = false;
       else {
         struct page_table_entry *tmp = malloc(sizeof(struct page_table_entry));
-        memset(tmp, 0, sizeof(struct page_table_entry));
         tmp->upage = user_page_number;
         tmp->status = FRAME;
-        tmp->frame = introduced; 
+        tmp->frame = introduced;
         tmp->writable = true;
+        tmp->frame = NULL;
+        tmp->swap_index = 0;
+        tmp->file = NULL;
+        tmp->file_offset = 0;
+        tmp->read_bytes = tmp->zero_bytes = 0;
         hash_insert(page_table, &tmp->elem);
       }
     }

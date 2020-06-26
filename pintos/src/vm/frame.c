@@ -1,13 +1,16 @@
-//
-// Created by jinho on 6/24/2020.
-//
-
 #include "frame.h"
 #include "swap.h"
+#include "userprog/pagedir.h"
+#include <string.h>
 static struct lock mutex;
 static hash frame_table;
 static list frame_list;
 struct frame_info* list_cur;
+
+/* Ruihang Begin: Declarations for eviction algorithm. */
+void *replace2get_page(void *upage);
+void cur_next();
+/* Ruihang End */
 
 unsigned hash_frame(const hash_elem* e, void* aux){
     frame_info* info=hash_entry(e,frame_info,elem);
@@ -89,7 +92,6 @@ void *replace2get_page(void *upage) {
   }
   frame_info *tmp = list_cur;
   void *rep_frame = list_cur->frame;
-  //todo: store info in the page table
   struct page_table_entry *pte = pte_find(&list_cur->thread_hold->page_table, &list_cur->page, false);
   if (pte->file != NULL) {
     page_table_mmap_write_back(pte);
