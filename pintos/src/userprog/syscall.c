@@ -33,6 +33,11 @@ static int sys_write(int fd, const void *buffer, unsigned size);
 static void sys_seek(int fd, unsigned position);
 static unsigned sys_tell(int fd);
 static void sys_close(int fd);
+
+static mapid_t sys_mmap(int fd, void *addr);
+static void sys_munmap(mapid_t mapping);
+
+static bool is_valid_user_addr(void *addr);
 /* ------ Declarations of System Calls End ------ */
 
 
@@ -206,8 +211,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 1);
       sys_close(*((int *)syscall_args[0]));
       break;
+    case SYS_MMAP:
+      check_valid_syscall_args(syscall_args, 2);
+      sys_mmap(*((int *)syscall_args[0]), *((void **)syscall_args[1]));
+      break;
     default:
-      // Todo: implement more in project 3 and 4
+      // Todo: implement more in project 4
       break;
   }
 }
@@ -396,5 +405,82 @@ sys_close(int fd) {
 
   list_remove(&(_fd->elem));
   free(_fd);
+}
+
+
+static mapid_t
+sys_mmap(int fd, void *addr) {
+  if (!is_valid_user_addr(addr))
+    return -1;
+
+  /* FD 0 and 1 are not mappable. */
+  if (fd == 0 || fd == 1)
+    return -1;
+
+  /* Fail if fd is not opened by the current thread. */
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  if (_fd == NULL)
+    return -1;
+
+  /* If addr is not page-aligned, fail. */
+  if (((uint32_t) addr) % (PGSIZE) != 0)
+    return -1;
+
+  /* If the file has 0 length, fail. */
+  int len = file_length(_fd->_file);
+  if (len == 0)
+    return -1;
+
+  /* You should use the file_reopen function to obtain a separate and
+   * independent reference to the file for each of its mappings.  ------5.3.4
+   */
+  struct file *file = file_reopen(_fd->_file);
+  off_t ofs = 0;
+  uint32_t read_bytes = len;
+
+  /* The first while-loop checks whether all pages do not overlap any existing
+   * pages.
+   * Return -1 if overlap happens.
+   */
+  while (read_bytes > 0) {
+    uint32_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    if (pte_find(&thread_current()->page_table, addr, false) != NULL)
+      return -1;
+    read_bytes -= page_read_bytes;
+    addr += PGSIZE;
+  }
+
+  /* The second while-loop maps pages of file to virtual address. */
+  read_bytes = len;
+  while (read_bytes > 0) {
+    uint32_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    uint32_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+    /* Assert that the new page can always be inserted successfully, since we
+     * checked overlap in the first while-loop.
+     */
+    ASSERT(page_table_map_file_page(file, ofs, addr,
+                                  page_read_bytes,
+                                  page_zero_bytes,
+                                  true))
+
+    read_bytes -= page_read_bytes;
+    ofs += page_read_bytes;
+    addr += PGSIZE;
+  }
+
+  mapid_t res = thread_current()->md_num++;
+  return res;
+}
+
+static void
+sys_munmap(mapid_t mapping) {
+  // Todo
+}
+
+
+static bool
+is_valid_user_addr(void *addr) {
+  return addr >= USER_ADDR_START && addr < PHYS_BASE;
 }
 /* Ruihang End */

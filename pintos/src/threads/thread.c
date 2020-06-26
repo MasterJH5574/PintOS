@@ -619,6 +619,11 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&t->waited_by_parent, 0);
   sema_init(&t->exit_sem, 0);
 #endif
+
+#ifdef VM
+  t->md_num = 0;
+  list_init(&t->mmap_descriptors);
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

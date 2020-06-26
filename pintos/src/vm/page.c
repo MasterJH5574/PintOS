@@ -118,12 +118,14 @@ page_table_set_page(void *upage, void *kpage, bool writable) {
   return success;
 }
 
-/* Find the spte of user_page_number in page_table. */
+/* Find the spte of UPAGE in page_table. Return NULL if upage not found. */
 struct page_table_entry *
 pte_find(page_table_t *page_table, void *upage, bool locked) {
   if (!locked)
     lock_acquire(&page_table_lock);
   ASSERT(page_table != NULL)
+  /* Assert that UPAGE is page-aligned. */
+  ASSERT((uint32_t) upage % (PGSIZE) == 0)
 
   struct page_table_entry key;
   key.upage = upage;
@@ -133,6 +135,40 @@ pte_find(page_table_t *page_table, void *upage, bool locked) {
     lock_release(&page_table_lock);
 
   return elem != NULL ? hash_entry(elem, struct page_table_entry, elem) : NULL;
+}
+
+/* Map a page from file to user address UPAGE. */
+bool page_table_map_file_page(struct file *file,
+                              off_t ofs,
+                              uint32_t *upage,
+                              uint32_t read_bytes,
+                              uint32_t zero_bytes,
+                              bool writable) {
+  /* Assert that UPAGE is page-aligned. */
+  ASSERT((uint32_t) upage % (PGSIZE) == 0)
+
+  /* Create a new supplemental page table entry. */
+  struct page_table_entry *pte = malloc(sizeof(struct page_table_entry));
+  pte->upage = upage;
+  pte->status = FILE;
+  pte->writable = writable;
+  pte->frame = NULL;
+  pte->swap_index = 0;
+  pte->file = file;
+  pte->file_offset = ofs;
+  pte->read_bytes = read_bytes;
+  pte->zero_bytes = zero_bytes;
+
+  struct mmap_descriptor *md = malloc(sizeof(struct mmap_descriptor));
+  md->mapid = thread_current()->md_num;
+  md->pte = pte;
+  list_push_back(&thread_current()->mmap_descriptors, &md->elem);
+
+  /* If insertion is successful, the result is NULL.
+   * If an equal element is already in the table, result of hash_insert will
+   * not be NULL, which means the insertion failed.
+   */
+  return hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
 }
 /* Ruihang End */
 
