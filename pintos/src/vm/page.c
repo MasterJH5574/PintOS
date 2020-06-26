@@ -325,9 +325,8 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         pte = malloc(sizeof(struct page_table_entry));
         pte->upage = upage;
         pte->status = FRAME;
-        pte->frame = introduced;
         pte->writable = true;
-        pte->frame = NULL;
+        pte->frame = introduced;
         pte->swap_index = 0;
         pte->file = NULL;
         pte->file_offset = 0;
