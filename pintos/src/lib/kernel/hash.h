@@ -30,7 +30,7 @@ struct hash_elem
   {
     struct list_elem list_elem;
   };
-
+typedef struct hash_elem hash_elem ;
 /* Converts pointer to hash element HASH_ELEM into a pointer to
    the structure that HASH_ELEM is embedded inside.  Supply the
    name of the outer structure STRUCT and the member name MEMBER
@@ -65,7 +65,7 @@ struct hash
     hash_less_func *less;       /* Comparison function. */
     void *aux;                  /* Auxiliary data for `hash' and `less'. */
   };
-
+typedef struct hash hash;
 /* A hash table iterator. */
 struct hash_iterator 
   {
