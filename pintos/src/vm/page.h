@@ -3,10 +3,10 @@
 
 #include <hash.h>
 #include <filesys/off_t.h>
-#include <lib/user/syscall.h>
 
 /* Ruihang Begin */
 typedef struct hash page_table_t;
+typedef int mapid_t;
 
 /* Type page_status represents where the page is. */
 enum page_status {
