@@ -44,6 +44,7 @@ static bool is_valid_user_addr(void *addr);
 /* File system lock to ensure that there is at most one system call related to
  * file system at one time.
  */
+struct lock filesys_lock;
 
 
 /* Get the struct file_descriptor of struct thread _thread. */
