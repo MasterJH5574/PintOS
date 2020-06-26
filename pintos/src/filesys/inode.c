@@ -20,6 +20,7 @@ typedef struct inode_disk
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
     uint32_t unused[125];               /* Not used. */
+    bool isdir;                         /* Is dir file. */
   } inode_disk;
 typedef struct inode_table_disk{
   block_sector_t ptr[PTR_NUM_BLOCK];
@@ -432,3 +433,19 @@ inode_length (const struct inode *inode)
 {
   return inode->data.length;
 }
+
+/*Jiaxin Begin*/
+
+void
+inode_set_dir(struct inode *inode)
+{
+  inode->data.isdir = true;
+  cache_write(inode->sector, &inode->data);
+}
+
+bool
+inode_isdir(struct inode *inode)
+{
+  return inode->data.isdir;
+}
+/*Jiaxin End*/

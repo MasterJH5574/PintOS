@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "filesys/free-map.h"
 
 /* A directory. */
 struct dir 
@@ -234,3 +235,70 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+/*Jiaxin Begin*/
+
+bool
+subfile_create(struct dir* dir, char* file_name, off_t initial_size)
+{
+  ASSERT(file_name != NULL);
+  if (strlen(file_name) == 0)
+    return false;
+  if (dir == NULL)
+    return false;
+  block_sector_t block_sector = (block_sector_t) -1;
+  bool success = free_map_allocate(1, &block_sector)
+              && inode_create(block_sector, initial_size)
+              && dir_add(dir, file_name, block_sector);
+  if (!success && block_sector != (block_sector_t) -1)
+    free_map_release(block_sector, 1);
+  return success;
+}
+
+bool
+subfile_remove(struct dir* dir, char* file_name)
+{
+  ASSERT(dir != NULL);
+  ASSERT(file_name != NULL);
+  if (strlen(file_name) == 0)
+    return false;
+  struct inode* inode = NULL;
+  bool ret = dir_lookup(dir, file_name, &inode);
+  if (!ret || inode == NULL)
+    return false;
+  if (inode_isdir(inode))
+  {
+    inode_close(inode);
+    return false;
+  }
+  inode_close(inode);
+  return dir_remove(dir, file_name);
+}
+
+struct file *
+subfile_lookup(struct dir* dir, char* file_name)
+{
+  ASSERT(dir != NULL);
+  ASSERT(file_name != NULL);
+  if (strlen(file_name) == 0)
+    return false;
+  struct inode* inode = NULL;
+  bool ret = dir_lookup(dir, file_name, &inode);
+  if (!ret || inode == NULL)
+    return false;
+  if (inode_isdir(inode))
+  {
+    inode_close(inode);
+    return false;
+  }
+  struct file* file = file_open(inode);
+  return file;
+}
+
+bool
+is_dir_file(struct file_descriptor* fd)
+{
+  return inode_isdir(file_get_inode(fd->_file));
+}
+
+/*Jiaxin End*/
