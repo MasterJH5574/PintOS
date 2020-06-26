@@ -194,6 +194,13 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+#ifdef FILESYS
+  /*Jiaxin Begin*/
+  /*set the current_dir for filesys*/
+  t->current_dir = thread_current()->current_dir;
+  /*Jiaxin End*/
+#endif
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;

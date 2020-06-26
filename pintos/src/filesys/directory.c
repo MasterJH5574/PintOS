@@ -236,6 +236,12 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
+struct dir*
+subdir_lookup(struct dir* dir, char* subdir_name)
+{
+  //TODO subdir_lookup
+}
+
 /*Jiaxin Begin*/
 
 bool

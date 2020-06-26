@@ -120,6 +120,10 @@ struct thread
     /*Jiaxin End*/
 #endif
 
+#ifdef FILESYS
+    struct dir* current_dir;
+#endif
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
     struct semaphore sleep;
