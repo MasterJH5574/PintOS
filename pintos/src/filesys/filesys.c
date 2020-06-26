@@ -12,6 +12,10 @@ struct block *fs_device;
 
 static void do_format (void);
 
+/* TODO:
+* A parser to parse the name
+*/
+
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void
@@ -46,6 +50,9 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+#ifdef FILESYS
+  //TODO: parse the name && use subfile_create to create a file
+#endif
   block_sector_t inode_sector = 0;
   struct dir *dir = dir_open_root ();
   bool success = (dir != NULL
@@ -67,6 +74,10 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+#ifdef FILESYS
+  //TODO: parse the name && 
+  //  use subdir_loopup and subfile_lookup to find and open the file
+#endif
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
 
@@ -84,6 +95,10 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
+#ifdef FILESYS
+  //TODO: parse the name && 
+  //  use subdir_remove and subfile_remove to remove a file
+#endif
   struct dir *dir = dir_open_root ();
   bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
