@@ -260,6 +260,9 @@ inode_close (struct inode *inode)
           while (next != -1) {
             cache_read(next, &table_buffer);
             for (int i = 0; i < PTR_NUM_BLOCK; i++) {
+              if(table_buffer.ptr[i]==-1) {
+                break;
+              }
               free_map_release(table_buffer.ptr[i],1);
             }
             free_map_release(next,1);
