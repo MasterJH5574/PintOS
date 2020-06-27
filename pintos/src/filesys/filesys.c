@@ -17,11 +17,13 @@ bool check_valid_path_token(const char *token);
 
 /* Jiaxin Begin */
 
+/* This is only used to check the validation of a token*/
 bool
 check_valid_path_token(const char *token)
 {
   if (token == NULL)
     return false;
+  /* Check the length of the token is within the MAX_DIR_LENGTH */
   for (int i = 0; i < MAX_DIR_LENGTH + 1; ++i)
   {
     if (token[i] == '\0')
@@ -32,19 +34,28 @@ check_valid_path_token(const char *token)
 
 /*
 * A parser to parse the path name
+* Input: const char *path (the full path you get from the user, including the file name and path information)
+* Output: struct dir *dir (dir parsed, it will be moved to the dir that the file in)
+*         char* file_name (the real name of the file with no path information)
+*         bool is_dir     (whether it's a pure dir (end with '/'))
+* Return: bool            (true: the whole process worked, false: something wrong occured)
 */
 bool
 path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
 {
+  // First set the is_dir to false
   *is_dir = false;
+
+  // Check the length of the path
   int length = strlen(path);
-  if (length == 0)
+  if (length == 0)  //empty path
     return false;
 
-  //get a copy of path
+  // Get a copy of the path for later use
   char *path_copy = malloc(length + 1);
   strlcpy(path_copy, path, length + 1);
 
+  // Check whetehr a pure dir (end with '/'), and delete the end '/'.
   if (length > 0 && path_copy[length - 1] == '/')
   {
     *is_dir = true;
@@ -52,20 +63,23 @@ path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
     path_copy[length] = '\0';
   }
 
-  if (length == 0)  //is root path
+  // Check whether is the root path (the path "/")
+  if (length == 0)
   {
     free(path_copy);
     return false;
   }
 
-  if (path_copy[0] == '/')
+  if (path_copy[0] == '/') // the root directory, file name like "/.../x"
     *dir = dir_open_root();
-  else
+  else                    // normal directory, should use the directory saved in the thread info
     *dir = dir_reopen(thread_current()->current_dir);
 
+  // Separate the token and move the dir
   char *token, *next_token, *save_ptr;
   for (token = strtok_r(path_copy, "/", &save_ptr); ; token = next_token)
   {
+    // Check the validation of the token
     if (!check_valid_path_token(token))
     {
       dir_close(*dir);
@@ -74,8 +88,9 @@ path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
     }
     ASSERT(token != NULL);
     next_token = strtok_r(NULL, "/", &save_ptr);
-    if (next_token != NULL)
+    if (next_token != NULL) // Token is not the file name
     {
+      // Change dir to the new sub directory
       struct dir *tmp_dir = *dir;
       *dir = subdir_lookup(*dir, token);
       dir_close(tmp_dir);
@@ -84,10 +99,12 @@ path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
         free(path_copy);
         return false;
       }
-    } else  //token is the file name
+    } else  // Token is the file name, break
       break;
   }
+  // Token is the file name and save it into file_name
   strlcpy(*file_name, token, MAX_DIR_LENGTH + 1);
+
   free(path_copy);
   return true;
 }
