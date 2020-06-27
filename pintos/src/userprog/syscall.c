@@ -545,7 +545,11 @@ sys_inumber(int fd) {
   if (_fd == NULL)
     sys_exit(-1);
 
-  int res = inode_get_inumber(file_get_inode(_fd->_file));
+  int res = -1;
+  if (file_descriptor_is_dir(_fd))
+    res = inode_get_inumber(_fd->_dir->inode);
+  else
+    res = inode_get_inumber(file_get_inode(_fd->_file));
   lock_release(&filesys_lock);
   return res;
 }
