@@ -8,6 +8,7 @@
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "threads/synch.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -396,7 +397,16 @@ sys_close(int fd) {
   list_remove(&(_fd->elem));
   free(_fd);
 }
-static void sys_chdir(const char* dir){
+static bool sys_chdir(const char* dir){
+  struct dir* target_dir=filesys_opendir(dir);
+  if (target_dir == NULL) {
+    return false;
+  }
+  dir_close(thread_current()->current_dir);
+  thread_current()->current_dir=target_dir;
+  return true;
+}
+static bool sys_mkdir(const char* dir){
 
 }
 /* Ruihang End */

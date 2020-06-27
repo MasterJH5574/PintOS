@@ -177,6 +177,7 @@ void thread_rec_cpu_upd(thread *t, void *args UNUSED);
 
 int thread_get_load_avg (void);
 void thread_load_avg_upd (void);
+void set_initial_directory ();
 
 bool compare_prior(const list_elem * thread1,const list_elem * thread2,void* aux);
 #endif /* threads/thread.h */

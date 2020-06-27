@@ -14,7 +14,6 @@ struct block *fs_device;
 
 static void do_format (void);
 bool check_valid_path_token(const char *token);
-bool path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir);
 
 /* Jiaxin Begin */
 

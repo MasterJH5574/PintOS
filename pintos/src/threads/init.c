@@ -127,7 +127,9 @@ pintos_init (void)
   ide_init ();
   locate_block_devices ();
   cache_init();
+  
   filesys_init (format_filesys);
+  set_initial_directory();
 #endif
 
   printf ("Boot complete.\n");
