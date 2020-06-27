@@ -9,6 +9,8 @@
 typedef struct hash page_table_t;
 typedef int mapid_t;
 
+extern struct lock page_table_lock;
+
 /* Type page_status represents where the page is. */
 enum page_status {
   FRAME,
@@ -20,7 +22,7 @@ struct page_table_entry {
   void *upage;                            /* As the key of page table. */
   enum page_status status;                /* Show where the page is. */
   bool writable;                          /* Whether this page is writable. */
-
+  bool pinned;                            /* Whether the page is pinned. */
 
   void *frame;                            /* If status == FRAME. */
 
@@ -68,6 +70,7 @@ void page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping);
 
 bool page_fault_handler(const void *fault_addr, bool write, void *esp);
 
+bool is_stack_access(const void *vaddr, const void *esp);
 
 /* Ruihang End */
 

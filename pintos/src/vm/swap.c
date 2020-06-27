@@ -21,14 +21,14 @@ block_sector_t swap_top;
 void swap_add_free_slot(block_sector_t index);
 
 /*Get a free swap slot*/
-block_sector_t swap_get_free_slot();
+block_sector_t swap_get_free_slot(void);
 
 /*Initialize swap when kernel starts*/
 void
 swap_init()
 {
   swap_block = block_get_role(BLOCK_SWAP);
-  ASSERT(swap_block != NULL);
+  ASSERT(swap_block != NULL)
   list_init(&swap_free_list);
 }
 
@@ -38,7 +38,7 @@ swap_init()
 block_sector_t
 swap_store(void *kpage)
 {
-  ASSERT(is_kernel_vaddr(kpage));
+  ASSERT(is_kernel_vaddr(kpage))
   block_sector_t index = swap_get_free_slot();
   if (index == ((block_sector_t) -1))
     return index;
@@ -55,9 +55,9 @@ swap_store(void *kpage)
 void
 swap_load(block_sector_t index, void *kpage)
 {
-  ASSERT(index != ((block_sector_t) -1));
-  ASSERT(is_kernel_vaddr(kpage));
-  ASSERT(index % BLOCK_NUM_PER_PAGE == 0);
+  ASSERT(index != ((block_sector_t) -1))
+  ASSERT(is_kernel_vaddr(kpage))
+  ASSERT(index % BLOCK_NUM_PER_PAGE == 0)
 
   for (int i = 0; i < BLOCK_NUM_PER_PAGE; ++i)
   {
@@ -71,7 +71,7 @@ swap_load(block_sector_t index, void *kpage)
 */
 void swap_free(block_sector_t index)
 {
-  ASSERT(index % BLOCK_NUM_PER_PAGE == 0);
+  ASSERT(index % BLOCK_NUM_PER_PAGE == 0)
 
   //At the top of swap slot so just move the swap_top
   if (index + BLOCK_NUM_PER_PAGE == swap_top)

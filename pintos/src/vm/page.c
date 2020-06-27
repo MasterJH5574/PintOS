@@ -7,7 +7,7 @@
 #include "swap.h"
 
 /* Ruihang Begin */
-static struct lock page_table_lock;
+struct lock page_table_lock;
 void __attribute__((optimize("-O0")))
 page_table_lock_init() {
   lock_init(&page_table_lock);
@@ -19,8 +19,6 @@ bool page_table_hash_less_func(const struct hash_elem *a,
                                const struct hash_elem *b,
                                void *aux);
 void page_table_entry_destroy(struct hash_elem *e, void *aux);
-
-bool is_stack_access(const void *vaddr, const void *esp);
 
 
 /* Initialize supplemental page table. */
@@ -82,7 +80,7 @@ page_table_entry_destroy(struct hash_elem *e, void *aux UNUSED) {
  * Returns true if successful, false if memory allocation
  * failed.
  */
-bool
+bool __attribute__((optimize("-O0")))
 page_table_set_page(void *upage, void *kpage, bool writable) {
   struct thread *t = thread_current();
   page_table_t *page_table = &t->page_table;
@@ -100,6 +98,7 @@ page_table_set_page(void *upage, void *kpage, bool writable) {
     pte = malloc(sizeof(struct page_table_entry));
     pte->upage = upage;
     pte->status = FRAME;
+    pte->pinned = false;
 
     pte->frame = kpage;
     pte->writable = writable;
@@ -128,13 +127,13 @@ page_table_remove_page(struct page_table_entry *pte) {
 }
 
 /* Find the spte of UPAGE in page_table. Return NULL if upage not found. */
-struct page_table_entry *
+struct page_table_entry * __attribute__((optimize("-O0")))
 pte_find(page_table_t *page_table, void *upage, bool locked) {
   if (!locked)
     lock_acquire(&page_table_lock);
   ASSERT(page_table != NULL)
   /* Assert that UPAGE is page-aligned. */
-  ASSERT((uint32_t) upage % (PGSIZE) == 0)
+  ASSERT(pg_ofs(upage) == 0)
 
   struct page_table_entry key;
   key.upage = upage;
@@ -147,7 +146,7 @@ pte_find(page_table_t *page_table, void *upage, bool locked) {
 }
 
 /* Map a page from file to user address UPAGE. */
-bool
+bool __attribute__((optimize("-O0")))
 page_table_map_file_page(struct file *file,
                               off_t ofs,
                               uint32_t *upage,
@@ -155,13 +154,15 @@ page_table_map_file_page(struct file *file,
                               uint32_t zero_bytes,
                               bool writable) {
   /* Assert that UPAGE is page-aligned. */
-  ASSERT((uint32_t) upage % (PGSIZE) == 0)
+  ASSERT(pg_ofs(upage) == 0)
+  lock_acquire(&page_table_lock);
 
   /* Create a new supplemental page table entry. */
   struct page_table_entry *pte = malloc(sizeof(struct page_table_entry));
   pte->upage = upage;
   pte->status = FILE;
   pte->writable = writable;
+  pte->pinned = false;
   pte->frame = NULL;
   pte->swap_index = 0;
   pte->file = file;
@@ -178,13 +179,16 @@ page_table_map_file_page(struct file *file,
    * If an equal element is already in the table, result of hash_insert will
    * not be NULL, which means the insertion failed.
    */
-  return hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
+  bool success = hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
+  lock_release(&page_table_lock);
+  return success;
 }
 
 /* Read a page from file to KPAGE.
  * Return true if read success. Otherwise return false.
  */
-bool page_table_mmap_read_file(struct page_table_entry *pte, void *kpage) {
+bool
+page_table_mmap_read_file(struct page_table_entry *pte, void *kpage) {
   struct file *file = pte->file;
   off_t ofs = pte->file_offset;
   uint32_t read_bytes = pte->read_bytes;
@@ -276,7 +280,7 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
 * Given a virtual address(page) and a hashtable, allocate a frame for this page,
 * return whether successful or not
 */
-bool
+bool __attribute__((optimize("-O0")))
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
   ASSERT(is_user_vaddr(fault_addr))
@@ -305,7 +309,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
     if (pte != NULL) {
       /* The page already exists. Load it from SWAP. */
       if (pte->status != SWAP) success = false;
-      introduced = frame_get_frame(0, upage);
+      introduced = frame_get_frame(0, upage, true);
       if (introduced == NULL) success = false;
       else {
         /* Ruihang Begin */
@@ -318,7 +322,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
       }
     } else {
       /* The page does not exist before. Perform stack growth. */
-      introduced = frame_get_frame(0, upage);
+      introduced = frame_get_frame(0, upage, true);
       if (introduced == NULL) success = false;
       else {
         success = true;
@@ -326,6 +330,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         pte->upage = upage;
         pte->status = FRAME;
         pte->writable = true;
+        pte->pinned = false;
         pte->frame = introduced;
         pte->swap_index = 0;
         pte->file = NULL;
@@ -341,7 +346,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
       /* Note that pte->status != FRAME by the assertion above. */
       if (pte->status == SWAP) {
         /* Load the page from SWAP. */
-        introduced = frame_get_frame(0, upage);
+        introduced = frame_get_frame(0, upage, true);
         if (introduced == NULL)
           success = false;
         else {
@@ -353,7 +358,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         }
       } else if (pte->status == FILE) {
         /* Read the page from mmapped file. */
-        introduced = frame_get_frame(0, upage);
+        introduced = frame_get_frame(0, upage, true);
         if (introduced == NULL)
           success = false;
         else {

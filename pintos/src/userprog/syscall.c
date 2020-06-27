@@ -3,6 +3,8 @@
 #include <syscall-nr.h>
 #include <string.h>
 #include <user/syscall.h>
+#include <vm/frame.h>
+#include <vm/swap.h>
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "threads/vaddr.h"
@@ -61,6 +63,79 @@ get_file_descriptor(struct thread *_thread, int fd) {
   return NULL;
 }
 
+/* Pin the page so that page fault will not occur. */
+static struct page_table_entry * __attribute__((optimize("-O0")))
+pin_user_address(const void *user_addr, void *esp, bool grow) {
+  void *upage = pg_round_down(user_addr);
+  page_table_t *page_table = &thread_current()->page_table;
+  uint32_t *pagedir = thread_current()->pagedir;
+
+  lock_acquire(&page_table_lock);
+  struct page_table_entry *pte = pte_find(page_table, upage, true);
+
+  bool new_frame = false;
+  /* Check whether present. If not present, load from swap/file.
+   * Very very similar to page_fault_handler().
+   * Always pin the page!
+   */
+  if (pte != NULL) {
+    pte->pinned = true;
+    if (pte->status == SWAP) {
+      /* Load the page from SWAP. */
+      void *frame = frame_get_frame(0, upage, true);
+      if (frame == NULL)
+        sys_exit(-1);
+      new_frame = true;
+      swap_load(pte->swap_index, frame);
+      pte->status = FRAME;
+      pte->frame = frame;
+      pte->swap_index = 0;
+    } else if (pte->status == FILE) {
+      /* Read the page from mmapped file. */
+      void *frame = frame_get_frame(0, upage, true);
+      if (frame == NULL)
+        sys_exit(-1);
+      new_frame = true;
+      page_table_mmap_read_file(pte, frame);
+      pte->status = FRAME;
+      pte->frame = frame;
+    } else {
+      // The page is already in memory. Therefore do nothing.
+      ASSERT(pte->status == FRAME)
+      goto finish;
+    }
+  } else {
+    if (grow && is_stack_access(user_addr, esp)) {
+      /* Perform stack growth. */
+      void *frame = frame_get_frame(0, upage, true);
+      if (frame == NULL)
+        sys_exit(-1);
+      new_frame = true;
+      pte = malloc(sizeof(struct page_table_entry));
+      pte->upage = upage;
+      pte->status = FRAME;
+      pte->writable = true;
+      pte->pinned = true;
+      pte->frame = frame;
+      pte->swap_index = 0;
+      pte->file = NULL;
+      pte->file_offset = 0;
+      pte->read_bytes = pte->zero_bytes = 0;
+      hash_insert(page_table, &pte->elem);
+    } else
+      sys_exit(-1);
+  }
+
+  ASSERT(new_frame)
+  bool pagedir_set_result = pagedir_set_page(pagedir, pte->upage,
+                                             pte->frame, pte->writable);
+  ASSERT(pagedir_set_result)
+
+finish:
+  lock_release(&page_table_lock);
+  return pte;
+}
+
 /* Check whether the address given by the user program which invoked a system
  * call is valid:
  *   1. not null pointer;
@@ -68,36 +143,42 @@ get_file_descriptor(struct thread *_thread, int fd) {
  *   3. not a pointer to unmapped virtual memory.
  */
 static void
-check_valid_user_addr(const void *user_addr, uint32_t size) {
+check_valid_user_addr(const void *user_addr, uint32_t size,
+                      void *esp, bool write, bool grow) {
   for (const void *addr = user_addr; addr < user_addr + size; addr++) {
-    if (!addr
-     || !is_user_vaddr(addr)
-     || pte_find(&thread_current()->page_table,
-                 pg_round_down(user_addr), false) == NULL) {
+    if (!addr || !is_user_vaddr(addr))
       sys_exit(-1);
-      return;
-    }
+    struct page_table_entry *pte = pin_user_address(addr, esp, grow);
+    ASSERT(pte != NULL)
+
+    /* If the access wants to write, but the page is not writable, terminate. */
+    if (!pte->writable && write)
+      sys_exit(-1);
   }
 }
 
 /* Return the system call number. */
 static uint32_t
-get_syscall_number(struct intr_frame *f) {
-  check_valid_user_addr(f->esp, sizeof(uint32_t));
+get_syscall_number(struct intr_frame *f, void *esp) {
+  check_valid_user_addr(f->esp, sizeof(uint32_t), esp, false, false);
   return *((uint32_t *)(f->esp));
 }
 
-/* Check whether the parameters of a system call are all valid. */
+/* Check whether the parameters of a system call are all valid.
+ * And pin the pte. */
 static void
-check_valid_syscall_args(void** syscall_args, int num) {
+check_valid_syscall_args(void** syscall_args, int num, void *esp) {
   for (int i = 0; i < num; i++)
-    check_valid_user_addr(syscall_args[i], sizeof(uint32_t));
+    check_valid_user_addr(syscall_args[i], sizeof(uint32_t), esp,
+                          false, false);
 }
 
-/* Check whether the address of the user string is valid. */
+/* Check whether the address of the user string is valid.
+ * And pin the pte.
+ */
 static void
-check_valid_user_string(const void *user_string) {
-  check_valid_user_addr(user_string, sizeof(char));
+check_valid_user_string(const void *user_string, void *esp) {
+  check_valid_user_addr(user_string, sizeof(char), esp, false, true);
 
   int len = 0;
   while (*((char *)user_string) != '\0') {
@@ -107,17 +188,57 @@ check_valid_user_string(const void *user_string) {
     }
     len++;
     user_string++;
-    check_valid_user_addr(user_string, sizeof(char));
+    check_valid_user_addr(user_string, sizeof(char), esp, false, true);
   }
 }
 
-/* Check whether the address of the user buffer is valid. */
+/* Check whether the address of the user buffer is valid.
+ * And pin the pte.
+ */
 static void
-check_valid_user_buffer(const void *user_buffer, unsigned size) {
+check_valid_user_buffer(const void *user_buffer, unsigned size,
+                        void *esp, bool write) {
   for (const void *addr = user_buffer; addr < user_buffer + size; addr++)
-    check_valid_user_addr(addr, sizeof(void));
+    check_valid_user_addr(addr, sizeof(void), esp, write, true);
 }
 
+/* Unpin pages! */
+static void
+unpin_user_addr(const void *user_addr, uint32_t size) {
+  page_table_t *page_table = &thread_current()->page_table;
+  for (const void *addr = user_addr; addr < user_addr + size; addr++) {
+    void *upage = pg_round_down(addr);
+    struct page_table_entry *pte = pte_find(page_table, upage, false);
+    pte->pinned = false;
+  }
+}
+
+static void
+unpin_syscall_number(const void *esp) {
+  unpin_user_addr(esp, sizeof(uint32_t));
+}
+
+static void
+unpin_syscall_args(void **syscall_args, int num) {
+  for (int i = 0; i < num; i++)
+    unpin_user_addr(syscall_args[i], sizeof(uint32_t));
+}
+
+static void
+unpin_string(const void *user_string) {
+  unpin_user_addr(user_string, sizeof(char));
+
+  while (*((char *)user_string) != '\0') {
+    user_string++;
+    unpin_user_addr(user_string, sizeof(char));
+  }
+}
+
+static void
+unpin_buffer(const void *user_buffer, unsigned size) {
+  for (const void *addr = user_buffer; addr < user_buffer + size; addr++)
+    unpin_user_addr(addr, sizeof(void));
+}
 /* Ruihang End */
 
 void __attribute__((optimize("-O0")))
@@ -134,13 +255,14 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
+  void *esp = f->esp;
 #ifdef VM
   /*Jiaxin Begin*/
-  thread_current()->esp =  f->esp;
+  thread_current()->esp = esp;
   /*Jiaxin End*/
 #endif
 
-  uint32_t syscall_number = get_syscall_number(f);
+  uint32_t syscall_number = get_syscall_number(f, esp);
   void* syscall_args[3] = {f->esp + 4, f->esp + 8, f->esp + 12};
 
   switch (syscall_number) {
@@ -148,81 +270,105 @@ syscall_handler (struct intr_frame *f UNUSED)
       sys_halt();
       break;
     case SYS_EXIT:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       sys_exit(*((int*)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
       break;
     case SYS_EXEC:
-      check_valid_syscall_args(syscall_args, 1);
-      check_valid_user_string(*((const char **)syscall_args[0]));
+      check_valid_syscall_args(syscall_args, 1, esp);
+      check_valid_user_string(*((const char **)syscall_args[0]), esp);
       f->eax = sys_exec(*((const char **)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
+      unpin_string(*((const char **)syscall_args[0]));
       break;
     case SYS_WAIT:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       f->eax = sys_wait(*((pid_t *)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
       break;
     case SYS_CREATE:
-      check_valid_syscall_args(syscall_args, 2);
-      check_valid_user_string(*((const char **)syscall_args[0]));
+      check_valid_syscall_args(syscall_args, 2, esp);
+      check_valid_user_string(*((const char **)syscall_args[0]), esp);
       f->eax = sys_create(*((const char **)syscall_args[0]),
           *((unsigned *)syscall_args[1]));
+      unpin_syscall_args(syscall_args, 2);
+      unpin_string(*((const char **)syscall_args[0]));
       break;
     case SYS_REMOVE:
-      check_valid_syscall_args(syscall_args, 1);
-      check_valid_user_string(*((const char **)syscall_args[0]));
+      check_valid_syscall_args(syscall_args, 1, esp);
+      check_valid_user_string(*((const char **)syscall_args[0]), esp);
       f->eax = sys_remove(*((const char **)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
+      unpin_string(*((const char **)syscall_args[0]));
       break;
     case SYS_OPEN:
-      check_valid_syscall_args(syscall_args, 1);
-      check_valid_user_string(*((const char **)syscall_args[0]));
+      check_valid_syscall_args(syscall_args, 1, esp);
+      check_valid_user_string(*((const char **)syscall_args[0]), esp);
       f->eax = sys_open(*((const char **)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
+      unpin_string(*((const char **)syscall_args[0]));
       break;
     case SYS_FILESIZE:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       f->eax = sys_filesize(*((int *)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
       break;
     case SYS_READ:
-      check_valid_syscall_args(syscall_args, 3);
+      check_valid_syscall_args(syscall_args, 3, esp);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
-          *((unsigned *)syscall_args[2]));
+          *((unsigned *)syscall_args[2]), esp, false);
 
       f->eax = sys_read(*((int *)syscall_args[0]),
           *((void **)syscall_args[1]),
           *((unsigned *)syscall_args[2]));
+      unpin_syscall_args(syscall_args, 3);
+      unpin_buffer(*((const void **)syscall_args[1]),
+                   *((unsigned *)syscall_args[2]));
       break;
     case SYS_WRITE:
-      check_valid_syscall_args(syscall_args, 3);
+      check_valid_syscall_args(syscall_args, 3, esp);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
-                              *((unsigned *)syscall_args[2]));
+                              *((unsigned *)syscall_args[2]), esp, true);
 
       f->eax = sys_write(*((int *)syscall_args[0]),
                         *((const void **)syscall_args[1]),
                         *((unsigned *)syscall_args[2]));
+      unpin_syscall_args(syscall_args, 3);
+      unpin_buffer(*((const void **)syscall_args[1]),
+                   *((unsigned *)syscall_args[2]));
       break;
     case SYS_SEEK:
-      check_valid_syscall_args(syscall_args, 2);
+      check_valid_syscall_args(syscall_args, 2, esp);
       sys_seek(*((int *)syscall_args[0]),
           *((unsigned *)syscall_args[1]));
+      unpin_syscall_args(syscall_args, 2);
       break;
     case SYS_TELL:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       f->eax = sys_tell(*((int *)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
       break;
     case SYS_CLOSE:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       sys_close(*((int *)syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
       break;
     case SYS_MMAP:
-      check_valid_syscall_args(syscall_args, 2);
+      check_valid_syscall_args(syscall_args, 2, esp);
       sys_mmap(*((int *)syscall_args[0]), *((void **)syscall_args[1]));
+      unpin_syscall_args(syscall_args, 2);
       break;
     case SYS_MUNMAP:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       sys_munmap(*((mapid_t *)syscall_args[1]));
+      unpin_syscall_args(syscall_args, 1);
       break;
     default:
       // Todo: implement more in project 4
       break;
   }
+
+  unpin_syscall_number(f->esp);
 }
 
 static void

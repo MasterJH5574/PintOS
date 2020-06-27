@@ -6,7 +6,7 @@
 /*Jiaxin Begin*/
 
 /*Initialize swap when kernel starts*/
-void swap_init();
+void swap_init(void);
 
 /* Store a KPAGE to a swap slot
 * return a block_sector_t index for later use
