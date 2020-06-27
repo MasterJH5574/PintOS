@@ -64,13 +64,13 @@ get_file_descriptor(struct thread *_thread, int fd) {
 }
 
 /* Pin the page so that page fault will not occur. */
-static struct page_table_entry * __attribute__((optimize("-O0")))
+static struct page_table_entry * //__attribute__((optimize("-O0")))
 pin_user_address(const void *user_addr, void *esp, bool grow) {
   void *upage = pg_round_down(user_addr);
   page_table_t *page_table = &thread_current()->page_table;
   uint32_t *pagedir = thread_current()->pagedir;
 
-  lock_acquire(&page_table_lock);
+//  lock_acquire(&page_table_lock);
   struct page_table_entry *pte = pte_find(page_table, upage, true);
 
   bool new_frame = false;
@@ -132,7 +132,7 @@ pin_user_address(const void *user_addr, void *esp, bool grow) {
   ASSERT(pagedir_set_result)
 
 finish:
-  lock_release(&page_table_lock);
+//  lock_release(&page_table_lock);
   return pte;
 }
 

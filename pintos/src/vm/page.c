@@ -80,14 +80,14 @@ page_table_entry_destroy(struct hash_elem *e, void *aux UNUSED) {
  * Returns true if successful, false if memory allocation
  * failed.
  */
-bool __attribute__((optimize("-O0")))
+bool //__attribute__((optimize("-O0")))
 page_table_set_page(void *upage, void *kpage, bool writable) {
   struct thread *t = thread_current();
   page_table_t *page_table = &t->page_table;
   uint32_t *pagedir = t->pagedir;
 
   bool success = false;
-  lock_acquire(&page_table_lock);
+//  lock_acquire(&page_table_lock);
 
   struct page_table_entry *pte = pte_find(page_table, upage, true);
   if (pte == NULL) {
@@ -110,7 +110,7 @@ page_table_set_page(void *upage, void *kpage, bool writable) {
     hash_insert(page_table, &pte->elem);
   }
 
-  lock_release(&page_table_lock);
+//  lock_release(&page_table_lock);
 
   if (success) {
     bool pagedir_set_result = pagedir_set_page(pagedir, upage, kpage, writable);
@@ -127,10 +127,10 @@ page_table_remove_page(struct page_table_entry *pte) {
 }
 
 /* Find the spte of UPAGE in page_table. Return NULL if upage not found. */
-struct page_table_entry * __attribute__((optimize("-O0")))
+struct page_table_entry * //__attribute__((optimize("-O0")))
 pte_find(page_table_t *page_table, void *upage, bool locked) {
-  if (!locked)
-    lock_acquire(&page_table_lock);
+//  if (!locked)
+//    lock_acquire(&page_table_lock);
   ASSERT(page_table != NULL)
   /* Assert that UPAGE is page-aligned. */
   ASSERT(pg_ofs(upage) == 0)
@@ -139,14 +139,14 @@ pte_find(page_table_t *page_table, void *upage, bool locked) {
   key.upage = upage;
   struct hash_elem *elem = hash_find(page_table, &key.elem);
 
-  if (!locked)
-    lock_release(&page_table_lock);
+//  if (!locked)
+//    lock_release(&page_table_lock);
 
   return elem != NULL ? hash_entry(elem, struct page_table_entry, elem) : NULL;
 }
 
 /* Map a page from file to user address UPAGE. */
-bool __attribute__((optimize("-O0")))
+bool //__attribute__((optimize("-O0")))
 page_table_map_file_page(struct file *file,
                               off_t ofs,
                               uint32_t *upage,
@@ -155,7 +155,7 @@ page_table_map_file_page(struct file *file,
                               bool writable) {
   /* Assert that UPAGE is page-aligned. */
   ASSERT(pg_ofs(upage) == 0)
-  lock_acquire(&page_table_lock);
+//  lock_acquire(&page_table_lock);
 
   /* Create a new supplemental page table entry. */
   struct page_table_entry *pte = malloc(sizeof(struct page_table_entry));
@@ -180,7 +180,7 @@ page_table_map_file_page(struct file *file,
    * not be NULL, which means the insertion failed.
    */
   bool success = hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
-  lock_release(&page_table_lock);
+//  lock_release(&page_table_lock);
   return success;
 }
 
@@ -280,7 +280,7 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
 * Given a virtual address(page) and a hashtable, allocate a frame for this page,
 * return whether successful or not
 */
-bool __attribute__((optimize("-O0")))
+bool //__attribute__((optimize("-O0")))
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
   ASSERT(is_user_vaddr(fault_addr))
@@ -291,7 +291,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   void *introduced = NULL;
 
   bool success = false;
-  lock_acquire(&page_table_lock);
+//  lock_acquire(&page_table_lock);
 
   struct page_table_entry *pte = pte_find(page_table, upage, true);
   ASSERT(!(pte != NULL && pte->status == FRAME))
@@ -373,11 +373,15 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   }
   /* Ruihang End */
 
-  lock_release(&page_table_lock);
+//  lock_release(&page_table_lock);
   if (success) {
     bool pagedir_set_result = pagedir_set_page(cur->pagedir, pte->upage,
                                                pte->frame, pte->writable);
     ASSERT(pagedir_set_result)
+  }
+
+  if (success == false) {
+    sys_exit(-1);
   }
 
   return success;
