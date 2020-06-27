@@ -3,6 +3,19 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
+/* Ruihang Begin */
+/* Check whether a struct file_descriptor designates a directory. */
+bool file_descriptor_is_dir(struct file_descriptor *fd) {
+  if (fd->_dir != NULL) {
+    ASSERT(fd->_file == NULL)
+    return true;
+  } else {
+    ASSERT(fd->_dir == NULL)
+    return false;
+  }
+}
+/* Ruihang End */
+
 /* An open file. */
 struct file 
   {

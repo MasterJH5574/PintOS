@@ -27,7 +27,22 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  bool success = inode_create (sector, (DIR_BASE_ENTRIES_NUM + entry_cnt)
+                               * sizeof (struct dir_entry));
+  if (success) {
+    struct inode *inode = inode_open(sector);
+    ASSERT(inode != NULL)
+    inode_set_dir(inode);
+
+    struct dir *dir = dir_open(inode);
+    ASSERT(dir != NULL)
+    bool add1 = dir_add(dir, ".", sector);
+    bool add2 = dir_add(dir, "..", sector);
+    ASSERT(add1 && add2)
+
+    inode_close(inode);
+  }
+  return success;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -39,7 +54,7 @@ dir_open (struct inode *inode)
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
-      dir->pos = 0;
+      dir->pos = DIR_BASE_ENTRIES_NUM * sizeof(struct dir_entry);
       return dir;
     }
   else
@@ -276,20 +291,28 @@ bool subdir_create(struct dir *cur, char *name) {
  */
 bool subdir_delete(struct dir *cur, char *name) {
   if (cur == NULL || name == NULL || strlen(name) == 0) return false;
-  struct inode *node = NULL;
-  if (!dir_lookup(cur, name, &node)) return false;
-  if (!inode_isdir(node) || 
-      inode_get_opencnt(node) > 1) {
-    inode_close(node);
+
+  /* Lookup the subdirectory designated by NAME. Return false if not found. */
+  struct dir *dir_to_be_removed = subdir_lookup(cur, name);
+  if (dir_to_be_removed == NULL)
     return false;
-  }
+
+  struct inode *node = dir_to_be_removed->inode;
+  ASSERT(inode_isdir(node))
+
+  /* Return false if the directory is opened by others. */
+  if (inode_get_opencnt(node) > 1)
+    return false;
+
   char* buffer = malloc(NAME_MAX + 1);
-  if (dir_readdir(cur, buffer)) { // remove empty directory only. 
+  if (dir_readdir(dir_to_be_removed, buffer)) { // remove empty directory only.
     dir_close(cur);
+    dir_close(dir_to_be_removed);
     free(buffer);
     return false;
   }
   free(buffer);
+  dir_close(dir_to_be_removed);
   return dir_remove(cur, name);
 }
 
@@ -360,11 +383,8 @@ subfile_lookup(struct dir* dir, char* file_name)
   return file;
 }
 
-/* Check whether the inode designated by FD is a directory. */
 bool
-is_dir_file(struct file_descriptor* fd)
-{
-  return inode_isdir(file_get_inode(fd->_file));
+dir_is_root_dir(struct dir *dir) {
+  return inode_is_root(dir->inode);
 }
-
 /*Jiaxin End*/

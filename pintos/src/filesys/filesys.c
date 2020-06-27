@@ -55,7 +55,7 @@ path_parser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
   char *path_copy = malloc(length + 1);
   strlcpy(path_copy, path, length + 1);
 
-  // Check whetehr a pure dir (end with '/'), and delete the end '/'.
+  // Check whether a pure dir (end with '/'), and delete the end '/'.
   if (length > 0 && path_copy[length - 1] == '/')
   {
     *is_dir = true;
@@ -66,8 +66,10 @@ path_parser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
   // Check whether is the root path (the path "/")
   if (length == 0)
   {
+    *dir = dir_open_root();
+    (*file_name)[0] = '\0';
     free(path_copy);
-    return false;
+    return true;
   }
 
   if (path_copy[0] == '/') // the root directory, file name like "/.../x"
@@ -145,8 +147,6 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
-
-  block_sector_t inode_sector = 0;
   char file_name_buffer[15];
   char* file_name=file_name_buffer;
   struct dir* dir;
@@ -196,20 +196,32 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-#ifdef FILESYS
-  //TODO: parse the name && 
-  //  use subdir_remove and subfile_remove to remove a file
-#endif
   struct dir* dir;
   char file_name_buffer[15];
   char* file_name=file_name_buffer;
   bool is_dir;
-  path_parser(name, &dir, &file_name, &is_dir);
-  bool success = dir != NULL && (subfile_remove(dir, file_name) || subdir_delete
-                                     (dir,file_name));
-  dir_close (dir); 
 
-  return success;
+  bool parse_success = path_parser(name, &dir, &file_name, &is_dir);
+  if (!parse_success)
+    return false;
+
+  bool remove_success = false;
+  ASSERT(dir != NULL)
+  if (is_dir) {
+    /* NAME designates a pure directory, just remove it unless it is
+     * the root directory.
+     */
+    if (dir_is_root_dir(dir))
+      remove_success = false;
+    else
+      remove_success = subdir_delete(dir, file_name);
+  } else {
+    /* Whether FILE_NAME designates a file or a directory, just call "remove".*/
+    remove_success = subfile_remove(dir, file_name)
+                     || subdir_delete(dir,file_name);
+  }
+  dir_close(dir);
+  return remove_success;
 }
 
 /* Formats the file system. */
@@ -235,8 +247,14 @@ struct dir* filesys_opendir(const char*name){
     return NULL;
 
   if (is_dir) {
-    /* If NAME designates a pure directory, just return the opened directory. */
-    return dir;
+    /* If NAME designates the root directory, just return dir. */
+    if (file_name[0] == '\0')
+      return dir;
+    else {
+      struct dir *res = subdir_lookup(dir, file_name);
+      dir_close(dir);
+      return res;
+    }
   } else {
     /* If NAME does not designate a pure directory, try to look subdirectory
      * FILE_NAME in DIR.

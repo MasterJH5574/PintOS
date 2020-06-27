@@ -322,8 +322,11 @@ sys_open(const char* filename) {
 static int
 sys_filesize(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-  /* Terminate if fd is not opened by the current thread. */
-  if (_fd == NULL)
+  /* Terminate if
+   *  - FD is not opened by the current thread, or
+   *  - the inode designated by _FD is a directory.
+   */
+  if (_fd == NULL || file_descriptor_is_dir(_fd))
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
@@ -351,9 +354,14 @@ sys_read(int fd, void *buffer, unsigned size) {
   } else {
     /* Read from file. */
     struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-    /* Terminate if fd is not opened by the current thread. */
+    /* Terminate or return -1 if
+     *  - FD is not opened by the current thread, or
+     *  - the inode designated by _FD is a directory.
+     */
     if (_fd == NULL)
       sys_exit(-1);
+    if (file_descriptor_is_dir(_fd))
+      return -1;
 
     lock_acquire(&filesys_lock);
     res = file_read(_fd->_file, buffer, size);
@@ -376,9 +384,14 @@ sys_write(int fd, const void *buffer, unsigned size) {
   } else {
     /* Write to file. */
     struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-    /* Terminate if fd is not opened by the current thread. */
+    /* Terminate or return -1 if
+     *  - FD is not opened by the current thread, or
+     *  - the inode designated by _FD is a directory.
+     */
     if (_fd == NULL)
       sys_exit(-1);
+    if (file_descriptor_is_dir(_fd))
+      return -1;
 
     lock_acquire(&filesys_lock);
     res = file_write(_fd->_file, buffer, size);
@@ -390,8 +403,11 @@ sys_write(int fd, const void *buffer, unsigned size) {
 static void
 sys_seek(int fd, unsigned position) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-  /* Terminate if fd is not opened by the current thread. */
-  if (_fd == NULL)
+  /* Terminate if
+   *  - FD is not opened by the current thread, or
+   *  - the inode designated by _FD is a directory.
+   */
+  if (_fd == NULL || file_descriptor_is_dir(_fd))
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
@@ -402,8 +418,11 @@ sys_seek(int fd, unsigned position) {
 static unsigned
 sys_tell(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-  /* Terminate if fd is not opened by the current thread. */
-  if (_fd == NULL)
+  /* Terminate if
+   *  - FD is not opened by the current thread, or
+   *  - the inode designated by _FD is a directory.
+   */
+  if (_fd == NULL || file_descriptor_is_dir(_fd))
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
@@ -451,7 +470,6 @@ sys_chdir(const char *dir) {
 static bool
 sys_mkdir(const char* dir){
   lock_acquire(&filesys_lock);
-  // Todo: question: is "mkdir a pure directory" valid?
 
   struct dir *d = NULL;
   char dir_name_buffer[20];
@@ -460,10 +478,10 @@ sys_mkdir(const char* dir){
 
   bool success = false;
   if (path_parser(dir, &d, &dir_name, &is_dir)) {
-    /* Assert that dir is not a pure directory. Otherwise error will occur
-     * in path_parser().
-     */
-    if (!is_dir) {
+    /* If DIR designates the root directory, just return false. */
+    if (is_dir && dir_name[0] == '\0') {
+      success = false;
+    } else {
       /* Create a subdirectory in D. */
       success = subdir_create(d, dir_name);
     }
@@ -485,7 +503,7 @@ sys_readdir(int fd, char *name) {
   /* Return false if fd is not opened by the current thread, or fd is not
    * a directory.
    */
-  if (_fd == NULL || !is_dir_file(_fd)) {
+  if (_fd == NULL || !file_descriptor_is_dir(_fd)) {
     lock_release(&filesys_lock);
     return false;
   }
@@ -506,7 +524,7 @@ sys_isdir(int fd) {
   /* Return false if fd is not opened by the current thread, or fd is not
    * a directory.
    */
-  if (_fd == NULL || !is_dir_file(_fd)) {
+  if (_fd == NULL || !file_descriptor_is_dir(_fd)) {
     lock_release(&filesys_lock);
     return false;
   } else {

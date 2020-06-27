@@ -444,6 +444,11 @@ inode_set_dir(struct inode *inode)
 }
 
 bool
+inode_is_root(struct inode *inode) {
+  return inode->sector == ROOT_DIR_SECTOR;
+}
+
+bool
 inode_isdir(struct inode *inode)
 {
   return inode->data.isdir;

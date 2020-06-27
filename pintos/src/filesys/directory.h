@@ -12,6 +12,9 @@
    retained, but much longer full path names must be allowed. */
 #define NAME_MAX 14
 
+/* Each directory has at least two entries: "." and "..". */
+#define DIR_BASE_ENTRIES_NUM 2
+
 struct inode;
 
 /* Opening and closing directories. */
@@ -38,6 +41,7 @@ bool subfile_create(struct dir*, char* file_name, off_t initial_size);
 bool subfile_remove(struct dir*, char* file_name);
 struct file *subfile_lookup(struct dir*, char* file_name);
 
-bool is_dir_file(struct file_descriptor*);
+/* Some checks. */
+bool dir_is_root_dir(struct dir *dir);
 
 #endif /* filesys/directory.h */

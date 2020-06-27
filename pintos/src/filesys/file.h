@@ -14,6 +14,8 @@ struct file_descriptor {
   struct thread *owner_thread;
   struct list_elem elem;
 };
+
+bool file_descriptor_is_dir(struct file_descriptor *fd);
 /* Ruihang End */
 
 
