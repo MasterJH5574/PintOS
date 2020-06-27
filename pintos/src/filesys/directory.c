@@ -236,10 +236,46 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
+/* ZYHowell: subdir*/
 struct dir*
-subdir_lookup(struct dir* dir, char* subdir_name)
+subdir_lookup(struct dir *cur, char *name)
 {
   //TODO subdir_lookup
+  if (cur == NULL || name == NULL || strlen(name) == 0) return false; //or ASSERT?
+  struct inode *node = NULL;
+  if (!dir_lookup(cur, name, &node)) return NULL;
+  if (!inode_isdir(node)) {
+    inode_close(node);
+    return NULL;
+  }
+  return dir_open(node);
+}
+bool subdir_create(struct dir *cur, char *name) {
+  if (cur == NULL || name == NULL || strlen(name) == 0) return false; //or ASSERT?
+  block_sector_t sector = -1;
+  bool success = free_map_allocate(1, &sector)
+              && dir_create(sector, 0)
+              && dir_add(cur, name, sector);
+  if (!success && sector != -1) free_map_release(sector);
+  return success; 
+}
+bool subdir_delete(struct dir *cur, char *name) {
+  if (cur == NULL || name == NULL || strlen(name) == 0) return false;
+  struct inode *node = NULL;
+  if (!dir_lookup(cur, name, &node)) return false;
+  if (!inode_isdir(node) || 
+      inode_get_opencnt(node) > 1) {
+    inode_close(node);
+    return false;
+  }
+  char* buffer = malloc(NAME_MAX + 1);
+  if (dir_readdir(cur, buffer)) {
+    dir_close(cur);
+    free(buffer);
+    return false;
+  }
+  free(buffer);
+  return dir_remove(cur, name);
 }
 
 /*Jiaxin Begin*/

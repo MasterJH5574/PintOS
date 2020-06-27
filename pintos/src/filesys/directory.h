@@ -29,7 +29,9 @@ bool dir_remove (struct dir *, const char *name);
 bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);
 
 /*Subdir*/
-struct dir* subdir_lookup(struct dir*, char* subdir_name);
+struct dir* subdir_lookup(struct dir *cur, char*name);
+bool subdir_create(struct dir *cur, char *name);
+bool subdir_delete(struct dir *cur, char *name);
 
 /* Subfile */
 bool subfile_create(struct dir*, char* file_name, off_t initial_size);
