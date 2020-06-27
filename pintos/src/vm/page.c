@@ -313,7 +313,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
     if (pte != NULL) {
       /* The page already exists. Load it from SWAP. */
       if (pte->status != SWAP) success = false;
-      introduced = frame_get_frame(0, upage, true);
+      introduced = frame_get_frame(0, upage);
       if (introduced == NULL) success = false;
       else {
         /* Ruihang Begin */
@@ -326,7 +326,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
       }
     } else {
       /* The page does not exist before. Perform stack growth. */
-      introduced = frame_get_frame(0, upage, true);
+      introduced = frame_get_frame(0, upage);
       if (introduced == NULL) success = false;
       else {
         success = true;
@@ -350,7 +350,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
       /* Note that pte->status != FRAME by the assertion above. */
       if (pte->status == SWAP) {
         /* Load the page from SWAP. */
-        introduced = frame_get_frame(0, upage, true);
+        introduced = frame_get_frame(0, upage);
         if (introduced == NULL)
           success = false;
         else {
@@ -362,7 +362,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         }
       } else if (pte->status == FILE) {
         /* Read the page from mmapped file. */
-        introduced = frame_get_frame(0, upage, true);
+        introduced = frame_get_frame(0, upage);
         if (introduced == NULL)
           success = false;
         else {

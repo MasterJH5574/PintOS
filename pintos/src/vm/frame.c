@@ -11,7 +11,7 @@ struct frame_info* list_cur;
 unsigned hash_frame(const hash_elem *e, void *aux);
 bool hash_frame_less(const hash_elem *a, const hash_elem *b, void *aux);
 
-void *replace2get_page(bool page_table_locked);
+void *replace2get_page(void);
 void cur_next(void);
 /* Ruihang End */
 
@@ -32,15 +32,14 @@ void __attribute__((optimize("-O0"))) frame_init () {
     lock_init(&mutex);
 }
 
-void *frame_get_frame (enum palloc_flags flag, void *user_page,
-                       bool page_table_locked) {
+void *frame_get_frame (enum palloc_flags flag, void *user_page) {
   user_page = pg_round_down(user_page);
   lock_acquire(&mutex);
   void* frame = palloc_get_page(flag|PAL_USER);
 
   if (frame == NULL) {
     if (flag & PAL_ASSERT) PANIC("try to get frame but pages run out, assert not to replace");
-    frame = replace2get_page(page_table_locked);
+    frame = replace2get_page();
     if (flag & PAL_ZERO)
       memset(frame, 0, PGSIZE);
   }
@@ -90,7 +89,7 @@ void cur_next() {
       list_cur = list_entry(list_head(&frame_list), struct frame_info, list_elem);
   list_cur = list_entry(list_next(&list_cur->list_elem), struct frame_info, list_elem);
 }
-void *replace2get_page(bool page_table_locked) {
+void *replace2get_page() {
   struct page_table_entry *pte = NULL;
   while(true){
     if (pagedir_is_accessed(list_cur->thread_hold->pagedir, list_cur->page)) {
@@ -99,7 +98,7 @@ void *replace2get_page(bool page_table_locked) {
       cur_next();
     } else {
       pte = pte_find(&list_cur->thread_hold->page_table, list_cur->page,
-                     page_table_locked);
+                     false);
       /* If the page was pinned, or it belongs to other thread, it cannot
        * be chosen.
        */
@@ -113,7 +112,7 @@ void *replace2get_page(bool page_table_locked) {
   frame_info *tmp = list_cur;
   void *rep_frame = list_cur->frame;
   pte = pte_find(&list_cur->thread_hold->page_table,
-                 list_cur->page, page_table_locked);
+                 list_cur->page, false);
 //  ASSERT(pte->status == FRAME)
   if (pte->file != NULL) {
     page_table_mmap_write_back(pte);

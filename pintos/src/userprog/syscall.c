@@ -83,7 +83,7 @@ pin_user_address(const void *user_addr, void *esp, bool grow) {
     pte->pinned = true;
     if (pte->status == SWAP) {
       /* Load the page from SWAP. */
-      void *frame = frame_get_frame(0, upage, true);
+      void *frame = frame_get_frame(0, upage);
       if (frame == NULL)
         sys_exit(-1);
       new_frame = true;
@@ -93,7 +93,7 @@ pin_user_address(const void *user_addr, void *esp, bool grow) {
       pte->swap_index = 0;
     } else if (pte->status == FILE) {
       /* Read the page from mmapped file. */
-      void *frame = frame_get_frame(0, upage, true);
+      void *frame = frame_get_frame(0, upage);
       if (frame == NULL)
         sys_exit(-1);
       new_frame = true;
@@ -108,7 +108,7 @@ pin_user_address(const void *user_addr, void *esp, bool grow) {
   } else {
     if (grow && is_stack_access(user_addr, esp)) {
       /* Perform stack growth. */
-      void *frame = frame_get_frame(0, upage, true);
+      void *frame = frame_get_frame(0, upage);
       if (frame == NULL)
         sys_exit(-1);
       new_frame = true;
