@@ -19,6 +19,6 @@ bool filesys_create (const char *name, off_t initial_size);
 struct file *filesys_open (const char *name);
 struct dir* filesys_opendir(const char*name);
 bool filesys_remove (const char *name);
-bool path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir);
+bool path_parser(const char *path, struct dir **dir, char **file_name, bool *is_dir);
 
 #endif /* filesys/filesys.h */

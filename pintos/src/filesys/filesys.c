@@ -41,7 +41,7 @@ check_valid_path_token(const char *token)
 * Return: bool            (true: the whole process worked, false: something wrong occured)
 */
 bool
-path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
+path_parser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
 {
   // First set the is_dir to false
   *is_dir = false;
@@ -151,7 +151,7 @@ filesys_create (const char *name, off_t initial_size)
   char* file_name=file_name_buffer;
   struct dir* dir;
   bool is_dir;
-  if(path_paser(name,&dir,&file_name,&is_dir)){
+  if(path_parser(name, &dir, &file_name, &is_dir)){
     if (is_dir) {
       dir_close(dir);
       return false;
@@ -178,7 +178,7 @@ filesys_open (const char *name)
   char file_name_buffer[15];
   char* file_name=file_name_buffer;
   bool is_dir;
-  path_paser(name,&dir,&file_name,&is_dir);
+  path_parser(name, &dir, &file_name, &is_dir);
   if (is_dir) {
     return NULL;
   }
@@ -203,7 +203,7 @@ filesys_remove (const char *name)
   char file_name_buffer[15];
   char* file_name=file_name_buffer;
   bool is_dir;
-  path_paser(name,&dir,&file_name,&is_dir);
+  path_parser(name, &dir, &file_name, &is_dir);
   bool success = dir != NULL && (subfile_remove(dir, file_name) || subdir_delete
                                      (dir,file_name));
   dir_close (dir); 
@@ -227,7 +227,7 @@ struct dir* filesys_opendir(const char*name){
   char file_name_buffer[15];
   char* file_name=file_name_buffer;
   bool is_dir;
-  path_paser(name,&dir,&file_name,&is_dir);
+  path_parser(name, &dir, &file_name, &is_dir);
   struct dir* open_dir=subdir_lookup(dir,file_name);
   dir_close (dir);
   
