@@ -237,6 +237,10 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 }
 
 /* ZYHowell: subdir*/
+/* Find the subdirectory designated by NAME in directory CUR.
+ * Find it, open it, and then return it.
+ * If there is no subdirectory named NAME, return NULL.
+ */
 struct dir*
 subdir_lookup(struct dir *cur, char *name)
 {
@@ -249,15 +253,27 @@ subdir_lookup(struct dir *cur, char *name)
   }
   return dir_open(node);
 }
+
+/* Create a subdirectory named NAME in directory CUR.
+ * Return whether the creation is successful.
+ */
 bool subdir_create(struct dir *cur, char *name) {
   if (cur == NULL || name == NULL || strlen(name) == 0) return false; //or ASSERT?
-  block_sector_t sector = -1;
+  block_sector_t sector = (block_sector_t) -1;
   bool success = free_map_allocate(1, &sector)
               && dir_create(sector, 0)
               && dir_add(cur, name, sector);
-  if (!success && sector != -1) free_map_release(sector,1);
+  if (!success && sector != ((block_sector_t) -1)) free_map_release(sector,1);
   return success; 
 }
+
+/* Delete the subdirectory designated by NAME in the directory CUR.
+ * Return whether the deletion is successful.
+ * Return false, if
+ *  - there is no subdirectory named NAME,
+ *  - or if the inode designated by NAME is not a subdirectory,
+ *  - or if the subdirectory NAME is not empty.
+ */
 bool subdir_delete(struct dir *cur, char *name) {
   if (cur == NULL || name == NULL || strlen(name) == 0) return false;
   struct inode *node = NULL;
@@ -278,7 +294,9 @@ bool subdir_delete(struct dir *cur, char *name) {
 }
 
 /*Jiaxin Begin*/
-
+/* Create a file with name FILE_NAME and initial size INITIAL_SIZE in
+ * the directory DIR.
+ */
 bool
 subfile_create(struct dir* dir, char* file_name, off_t initial_size)
 {
@@ -296,6 +314,9 @@ subfile_create(struct dir* dir, char* file_name, off_t initial_size)
   return success;
 }
 
+/* Remove the file named FILE_NAME in the directory DIR.
+ * Return false if there is no file FILE_NAME or the found inode is a directory.
+ */
 bool
 subfile_remove(struct dir* dir, char* file_name)
 {
@@ -316,6 +337,9 @@ subfile_remove(struct dir* dir, char* file_name)
   return dir_remove(dir, file_name);
 }
 
+/* Find the file named FILE_NAME in the directory DIR.
+ * Return NULL if there is no file FILE_NAME or the found inode is a directory.
+ */
 struct file *
 subfile_lookup(struct dir* dir, char* file_name)
 {
@@ -336,6 +360,7 @@ subfile_lookup(struct dir* dir, char* file_name)
   return file;
 }
 
+/* Check whether the inode designated by FD is a directory. */
 bool
 is_dir_file(struct file_descriptor* fd)
 {

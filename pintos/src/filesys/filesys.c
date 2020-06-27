@@ -222,6 +222,8 @@ do_format (void)
   free_map_close ();
   printf ("done.\n");
 }
+
+/* Open the directory designated by NAME. Return NULL if not found. */
 struct dir* filesys_opendir(const char*name){
   struct dir* dir;
   char file_name_buffer[15];
