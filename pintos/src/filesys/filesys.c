@@ -153,9 +153,8 @@ filesys_create (const char *name, off_t initial_size)
   bool is_dir;
   if(path_paser(name,&dir,&file_name,&is_dir)){
     if (is_dir) {
-      bool success=subdir_create(dir,file_name);
       dir_close(dir);
-      return success;
+      return false;
     }
     bool success=subfile_create(dir,file_name,initial_size);
     dir_close(dir);
