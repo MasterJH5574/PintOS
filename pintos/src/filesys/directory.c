@@ -255,7 +255,7 @@ bool subdir_create(struct dir *cur, char *name) {
   bool success = free_map_allocate(1, &sector)
               && dir_create(sector, 0)
               && dir_add(cur, name, sector);
-  if (!success && sector != -1) free_map_release(sector);
+  if (!success && sector != -1) free_map_release(sector,1);
   return success; 
 }
 bool subdir_delete(struct dir *cur, char *name) {

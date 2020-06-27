@@ -266,6 +266,7 @@ static int
 sys_open(const char* filename) {
   lock_acquire(&filesys_lock);
   struct file *_file = filesys_open(filename);
+  struct dir* dir=filesys_opendir(filename);
   lock_release(&filesys_lock);
 
   /* Return -1 if the file could not be opened. */
@@ -277,6 +278,7 @@ sys_open(const char* filename) {
   fd->fd = thread_current()->fd_num++;
   strlcpy(fd->file_name, filename, strlen(filename));
   fd->_file = _file;
+  fd->_dir=dir;
   fd->owner_thread = thread_current();
   list_push_back(&(thread_current()->file_descriptors), &(fd->elem));
 
@@ -384,10 +386,17 @@ sys_close(int fd) {
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
-  file_close(_fd->_file);
+  if (_fd->_file == NULL) {
+    dir_close(_fd->_dir);
+  } else {
+    file_close(_fd->_file);
+  }
   lock_release(&filesys_lock);
 
   list_remove(&(_fd->elem));
   free(_fd);
+}
+static void sys_chdir(const char* dir){
+
 }
 /* Ruihang End */

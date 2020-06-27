@@ -19,7 +19,7 @@ typedef struct inode_disk
     block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    uint32_t unused[124];               /* Not used. */
     bool isdir;                         /* Is dir file. */
   } inode_disk;
 typedef struct inode_table_disk{
@@ -449,3 +449,7 @@ inode_isdir(struct inode *inode)
   return inode->data.isdir;
 }
 /*Jiaxin End*/
+
+int inode_get_opencnt(struct inode* inode){
+  return inode->open_cnt;
+}

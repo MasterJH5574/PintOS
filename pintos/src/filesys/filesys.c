@@ -7,6 +7,7 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -73,7 +74,7 @@ path_paser(const char *path, struct dir **dir, char **file_name, bool *is_dir)
       return false;
     }
     ASSERT(token != NULL);
-    next_token = strtok(NULL, "/", &save_ptr);
+    next_token = strtok_r(NULL, "/", &save_ptr);
     if (next_token != NULL)
     {
       struct dir *tmp_dir = *dir;
@@ -128,42 +129,48 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
-#ifdef FILESYS
-  //TODO: parse the name && use subfile_create to create a file
-#endif
-  block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
-  bool success = (dir != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size)
-                  && dir_add (dir, name, inode_sector));
-  if (!success && inode_sector != 0) 
-    free_map_release (inode_sector, 1);
-  dir_close (dir);
 
-  return success;
+  block_sector_t inode_sector = 0;
+  char file_name_buffer[15];
+  char* file_name=file_name_buffer;
+  struct dir* dir;
+  bool is_dir;
+  if(path_paser(name,&dir,&file_name,&is_dir)){
+    if (is_dir) {
+      bool success=subdir_create(dir,file_name);
+      dir_close(dir);
+      return success;
+    }
+    bool success=subfile_create(dir,file_name,initial_size);
+    dir_close(dir);
+    return success;
+  }
+  return false;
 }
 
 /* Opens the file with the given NAME.
    Returns the new file if successful or a null pointer
    otherwise.
    Fails if no file named NAME exists,
-   or if an internal memory allocation fails. */
+   or if an internal memory allocation fails.
+   can not open a directory!!!
+   */
 struct file *
 filesys_open (const char *name)
 {
-#ifdef FILESYS
-  //TODO: parse the name && 
-  //  use subdir_loopup and subfile_lookup to find and open the file
-#endif
-  struct dir *dir = dir_open_root ();
-  struct inode *inode = NULL;
-
-  if (dir != NULL)
-    dir_lookup (dir, name, &inode);
+  
+  struct dir* dir;
+  char file_name_buffer[15];
+  char* file_name=file_name_buffer;
+  bool is_dir;
+  path_paser(name,&dir,&file_name,&is_dir);
+  if (is_dir) {
+    return NULL;
+  }
+  struct file* file=subfile_lookup(dir,file_name);
   dir_close (dir);
 
-  return file_open (inode);
+  return file;
 }
 
 /* Deletes the file named NAME.
@@ -177,13 +184,18 @@ filesys_remove (const char *name)
   //TODO: parse the name && 
   //  use subdir_remove and subfile_remove to remove a file
 #endif
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
+  struct dir* dir;
+  char file_name_buffer[15];
+  char* file_name=file_name_buffer;
+  bool is_dir;
+  path_paser(name,&dir,&file_name,&is_dir);
+  bool success = dir != NULL && (subfile_remove(dir, file_name) || subdir_delete
+                                     (dir,file_name));
   dir_close (dir); 
 
   return success;
 }
-
+
 /* Formats the file system. */
 static void
 do_format (void)
@@ -194,4 +206,18 @@ do_format (void)
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
+}
+struct dir* filesys_opendir(const char*name){
+  struct dir* dir;
+  char file_name_buffer[15];
+  char* file_name=file_name_buffer;
+  bool is_dir;
+  path_paser(name,&dir,&file_name,&is_dir);
+  if (!is_dir) {
+    return NULL;
+  }
+  struct dir* open_dir=subdir_lookup(dir,file_name);
+  dir_close (dir);
+  
+  return open_dir;
 }
