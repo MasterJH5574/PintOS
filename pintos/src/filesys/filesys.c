@@ -211,9 +211,6 @@ struct dir* filesys_opendir(const char*name){
   char* file_name=file_name_buffer;
   bool is_dir;
   path_paser(name,&dir,&file_name,&is_dir);
-  if (!is_dir) {
-    return NULL;
-  }
   struct dir* open_dir=subdir_lookup(dir,file_name);
   dir_close (dir);
   
