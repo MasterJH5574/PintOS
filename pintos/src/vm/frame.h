@@ -1,18 +1,18 @@
-//
-// Created by jinho on 6/24/2020.
-//
+#ifndef VM_FRAME_H
+#define VM_FRAME_H
 #include "threads/thread.h"
 #include "hash.h"
 #include "threads/palloc.h"
 #include "threads/malloc.h"
-#ifndef VM_FRAME_H
-#define VM_FRAME_H
+#include "lib/stdbool.h"
+#include "threads/vaddr.h"
 
 struct frame_info{
     thread* thread_hold;
     void* page;
     void* frame;
     struct hash_elem elem;
+    struct list_elem list_elem;
 };
 typedef struct frame_info frame_info;
 

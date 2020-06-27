@@ -127,6 +127,9 @@ struct thread
     /*Jiaxin Begin*/
     void *esp;                          /*Save esp of this thread*/
     /*Jiaxin End*/
+
+    mapid_t md_num;                     /* Number of mmap descriptors. */
+    struct list mmap_descriptors;       /* List of mmap descriptors. */
 #endif
     /* Ruihang End */
 

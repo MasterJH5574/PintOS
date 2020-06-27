@@ -10,7 +10,8 @@ void process_exit (void);
 void process_activate (void);
 
 /*Jiaxin Begin*/
-extern struct lock filesys_lock;
+// ------ filesys_lock is already in syscall.h/.c ------ Ruihang
+// extern struct lock filesys_lock;
 /*Jiaxin End*/
 
 /* Ruihang Begin */
