@@ -100,7 +100,11 @@ void *replace2get_page(bool page_table_locked) {
     } else {
       pte = pte_find(&list_cur->thread_hold->page_table, list_cur->page,
                      page_table_locked);
-      if (pte->pinned)
+      /* If the page was pinned, or it belongs to other thread, it cannot
+       * be chosen.
+       */
+      if (pte->pinned
+        || (list_cur->thread_hold != thread_current() && pte->status == FILE))
         cur_next();
       else
         break;
@@ -110,6 +114,7 @@ void *replace2get_page(bool page_table_locked) {
   void *rep_frame = list_cur->frame;
   pte = pte_find(&list_cur->thread_hold->page_table,
                  list_cur->page, page_table_locked);
+//  ASSERT(pte->status == FRAME)
   if (pte->file != NULL) {
     page_table_mmap_write_back(pte);
     pte->status = FILE;

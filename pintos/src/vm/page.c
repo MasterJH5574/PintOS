@@ -155,6 +155,7 @@ page_table_map_file_page(struct file *file,
                               bool writable) {
   /* Assert that UPAGE is page-aligned. */
   ASSERT(pg_ofs(upage) == 0)
+  struct thread *cur_thread = thread_current();
 //  lock_acquire(&page_table_lock);
 
   /* Create a new supplemental page table entry. */
@@ -171,15 +172,15 @@ page_table_map_file_page(struct file *file,
   pte->zero_bytes = zero_bytes;
 
   struct mmap_descriptor *md = malloc(sizeof(struct mmap_descriptor));
-  md->mapid = thread_current()->md_num;
+  md->mapid = cur_thread->md_num;
   md->pte = pte;
-  list_push_back(&thread_current()->mmap_descriptors, &md->elem);
+  list_push_back(&cur_thread->mmap_descriptors, &md->elem);
 
   /* If insertion is successful, the result is NULL.
    * If an equal element is already in the table, result of hash_insert will
    * not be NULL, which means the insertion failed.
    */
-  bool success = hash_insert(&thread_current()->page_table, &pte->elem) == NULL;
+  bool success = hash_insert(&cur_thread->page_table, &pte->elem) == NULL;
 //  lock_release(&page_table_lock);
   return success;
 }
@@ -187,7 +188,7 @@ page_table_map_file_page(struct file *file,
 /* Read a page from file to KPAGE.
  * Return true if read success. Otherwise return false.
  */
-bool
+bool __attribute__((optimize("-O0")))
 page_table_mmap_read_file(struct page_table_entry *pte, void *kpage) {
   struct file *file = pte->file;
   off_t ofs = pte->file_offset;
@@ -209,7 +210,7 @@ page_table_mmap_read_file(struct page_table_entry *pte, void *kpage) {
 }
 
 /* Write back in-frame page back into mmapped file. */
-void
+void __attribute__((optimize("-O0")))
 page_table_mmap_write_back(struct page_table_entry *pte) {
   ASSERT(pte->status == FRAME)            /* The page is now in memory. */
   ASSERT(pte->file != NULL)               /* The page is a mmapped page. */
@@ -225,7 +226,7 @@ page_table_mmap_write_back(struct page_table_entry *pte) {
 }
 
 /* Remove mmapped pages designated by MAPPING  from supplemental page table. */
-void
+void __attribute__((optimize("-O0")))
 page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
   struct list_elem *e, *next;
   struct file *file_to_close = NULL;
@@ -283,6 +284,9 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
 bool //__attribute__((optimize("-O0")))
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
+  if (!is_user_vaddr(fault_addr)) {
+    sys_exit(-1);
+  }
   ASSERT(is_user_vaddr(fault_addr))
 
   struct thread *cur = thread_current();

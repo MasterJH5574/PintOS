@@ -66,6 +66,7 @@ get_file_descriptor(struct thread *_thread, int fd) {
 /* Pin the page so that page fault will not occur. */
 static struct page_table_entry * //__attribute__((optimize("-O0")))
 pin_user_address(const void *user_addr, void *esp, bool grow) {
+#ifdef VM
   void *upage = pg_round_down(user_addr);
   page_table_t *page_table = &thread_current()->page_table;
   uint32_t *pagedir = thread_current()->pagedir;
@@ -134,6 +135,7 @@ pin_user_address(const void *user_addr, void *esp, bool grow) {
 finish:
 //  lock_release(&page_table_lock);
   return pte;
+#endif
 }
 
 /* Check whether the address given by the user program which invoked a system
@@ -146,6 +148,7 @@ static void
 check_valid_user_addr(const void *user_addr, uint32_t size,
                       void *esp, bool write, bool grow) {
   for (const void *addr = user_addr; addr < user_addr + size; addr++) {
+#ifdef VM
     if (!addr || !is_user_vaddr(addr))
       sys_exit(-1);
     struct page_table_entry *pte = pin_user_address(addr, esp, grow);
@@ -154,6 +157,14 @@ check_valid_user_addr(const void *user_addr, uint32_t size,
     /* If the access wants to write, but the page is not writable, terminate. */
     if (!pte->writable && write)
       sys_exit(-1);
+#else
+    if (!addr
+     || !is_user_vaddr(addr)
+     || pagedir_get_page(thread_current()->pagedir, addr) == NULL) {
+      sys_exit(-1);
+      return;
+      }
+#endif
   }
 }
 
@@ -205,12 +216,14 @@ check_valid_user_buffer(const void *user_buffer, unsigned size,
 /* Unpin pages! */
 static void
 unpin_user_addr(const void *user_addr, uint32_t size) {
+#ifdef VM
   page_table_t *page_table = &thread_current()->page_table;
   for (const void *addr = user_addr; addr < user_addr + size; addr++) {
     void *upage = pg_round_down(addr);
     struct page_table_entry *pte = pte_find(page_table, upage, false);
     pte->pinned = false;
   }
+#endif
 }
 
 static void
@@ -316,7 +329,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_READ:
       check_valid_syscall_args(syscall_args, 3, esp);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
-          *((unsigned *)syscall_args[2]), esp, false);
+          *((unsigned *)syscall_args[2]), esp, true);
 
       f->eax = sys_read(*((int *)syscall_args[0]),
           *((void **)syscall_args[1]),
@@ -328,7 +341,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WRITE:
       check_valid_syscall_args(syscall_args, 3, esp);
       check_valid_user_buffer(*((const void **)syscall_args[1]),
-                              *((unsigned *)syscall_args[2]), esp, true);
+                              *((unsigned *)syscall_args[2]), esp, false);
 
       f->eax = sys_write(*((int *)syscall_args[0]),
                         *((const void **)syscall_args[1]),
@@ -355,12 +368,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_MMAP:
       check_valid_syscall_args(syscall_args, 2, esp);
-      sys_mmap(*((int *)syscall_args[0]), *((void **)syscall_args[1]));
+      f->eax = sys_mmap(*((int *)syscall_args[0]), *((void **)syscall_args[1]));
       unpin_syscall_args(syscall_args, 2);
       break;
     case SYS_MUNMAP:
       check_valid_syscall_args(syscall_args, 1, esp);
-      sys_munmap(*((mapid_t *)syscall_args[1]));
+      sys_munmap(*((mapid_t *)syscall_args[0]));
       unpin_syscall_args(syscall_args, 1);
       break;
     default:
@@ -560,28 +573,29 @@ sys_close(int fd) {
 
 static mapid_t
 sys_mmap(int fd, void *addr) {
+#ifdef VM
   if (!is_valid_user_addr(addr))
-    return -1;
+    return MAP_FAILED;
 
   /* FD 0 and 1 are not mappable. */
   if (fd == 0 || fd == 1)
-    return -1;
+    return MAP_FAILED;
 
   /* Fail if fd is not opened by the current thread. */
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
   if (_fd == NULL)
-    return -1;
+    return MAP_FAILED;
 
   /* If addr is not page-aligned, fail. */
-  if (((uint32_t) addr) % (PGSIZE) != 0)
-    return -1;
+  if (pg_ofs(addr) != 0)
+    return MAP_FAILED;
 
   /* If the file has 0 length, fail. */
   lock_acquire(&filesys_lock);
   int len = file_length(_fd->_file);
   lock_release(&filesys_lock);
   if (len == 0)
-    return -1;
+    return MAP_FAILED;
 
   /* You should use the file_reopen function to obtain a separate and
    * independent reference to the file for each of its mappings.  ------5.3.4
@@ -596,12 +610,13 @@ sys_mmap(int fd, void *addr) {
    * pages.
    * Return -1 if overlap happens.
    */
+  void *addr_check = addr;
   while (read_bytes > 0) {
     uint32_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-    if (pte_find(&thread_current()->page_table, addr, false) != NULL)
-      return -1;
+    if (pte_find(&thread_current()->page_table, addr_check, false) != NULL)
+      return MAP_FAILED;
     read_bytes -= page_read_bytes;
-    addr += PGSIZE;
+    addr_check += PGSIZE;
   }
 
   /* The second while-loop maps pages of file to virtual address. */
@@ -625,11 +640,14 @@ sys_mmap(int fd, void *addr) {
 
   mapid_t res = thread_current()->md_num++;
   return res;
+#endif
 }
 
 static void
 sys_munmap(mapid_t mapping) {
+#ifdef VM
   page_table_remove_mmap(&thread_current()->mmap_descriptors, mapping);
+#endif
 }
 
 
