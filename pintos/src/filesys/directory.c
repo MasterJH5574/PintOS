@@ -240,7 +240,6 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 struct dir*
 subdir_lookup(struct dir *cur, char *name)
 {
-  //TODO subdir_lookup
   if (cur == NULL || name == NULL || strlen(name) == 0) return false; //or ASSERT?
   struct inode *node = NULL;
   if (!dir_lookup(cur, name, &node)) return NULL;
@@ -269,7 +268,7 @@ bool subdir_delete(struct dir *cur, char *name) {
     return false;
   }
   char* buffer = malloc(NAME_MAX + 1);
-  if (dir_readdir(cur, buffer)) {
+  if (dir_readdir(cur, buffer)) { // remove empty directory only. 
     dir_close(cur);
     free(buffer);
     return false;
