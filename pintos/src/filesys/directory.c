@@ -244,7 +244,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 struct dir*
 subdir_lookup(struct dir *cur, char *name)
 {
-  if (cur == NULL || name == NULL || strlen(name) == 0) return false; //or ASSERT?
+  if (cur == NULL || name == NULL || strlen(name) == 0) return NULL; //or ASSERT?
   struct inode *node = NULL;
   if (!dir_lookup(cur, name, &node)) return NULL;
   if (!inode_isdir(node)) {

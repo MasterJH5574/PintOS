@@ -178,8 +178,9 @@ filesys_open (const char *name)
   char file_name_buffer[15];
   char* file_name=file_name_buffer;
   bool is_dir;
-  path_parser(name, &dir, &file_name, &is_dir);
-  if (is_dir) {
+
+  bool parse_success = path_parser(name, &dir, &file_name, &is_dir);
+  if (!parse_success || is_dir) {
     return NULL;
   }
   struct file* file=subfile_lookup(dir,file_name);
@@ -229,9 +230,20 @@ struct dir* filesys_opendir(const char*name){
   char file_name_buffer[15];
   char* file_name=file_name_buffer;
   bool is_dir;
-  path_parser(name, &dir, &file_name, &is_dir);
-  struct dir* open_dir=subdir_lookup(dir,file_name);
-  dir_close (dir);
-  
-  return open_dir;
+  bool parse_success = path_parser(name, &dir, &file_name, &is_dir);
+  if (!parse_success)
+    return NULL;
+
+  if (is_dir) {
+    /* If NAME designates a pure directory, just return the opened directory. */
+    return dir;
+  } else {
+    /* If NAME does not designate a pure directory, try to look subdirectory
+     * FILE_NAME in DIR.
+     * If the subdirectory FILE_NAME does not exist, RES will be NULL.
+     */
+    struct dir *res = subdir_lookup(dir, file_name);
+    dir_close(dir);
+    return res;
+  }
 }

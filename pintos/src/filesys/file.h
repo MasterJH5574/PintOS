@@ -8,10 +8,11 @@
 struct file_descriptor {
   int fd;
   char file_name[20];
-  struct file *_file;
+  struct file *_file;                   /* _file == NULL if this is a dir. */
+  struct dir* _dir;                     /* _dir == NULL if this is a file. */
+                                        /* So at least one of them is NULL. */
   struct thread *owner_thread;
   struct list_elem elem;
-  struct dir* _dir;
 };
 /* Ruihang End */
 

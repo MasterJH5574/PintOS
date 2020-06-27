@@ -9,6 +9,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "threads/synch.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -34,6 +35,13 @@ static int sys_write(int fd, const void *buffer, unsigned size);
 static void sys_seek(int fd, unsigned position);
 static unsigned sys_tell(int fd);
 static void sys_close(int fd);
+
+/* System calls for filesystem. */
+static bool sys_chdir(const char *dir);
+static bool sys_mkdir(const char *dir);
+static bool sys_readdir(int fd, char *name);
+static bool sys_isdir(int fd);
+static int sys_inumber(int fd);
 /* ------ Declarations of System Calls End ------ */
 
 
@@ -200,8 +208,33 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_valid_syscall_args(syscall_args, 1);
       sys_close(*((int *)syscall_args[0]));
       break;
+    case SYS_CHDIR:
+      check_valid_syscall_args(syscall_args, 1);
+      check_valid_user_string(*((const char **) syscall_args[0]));
+      f->eax = sys_chdir(*((const char **) syscall_args[0]));
+      break;
+    case SYS_MKDIR:
+      check_valid_syscall_args(syscall_args, 1);
+      check_valid_user_string(*((const char **) syscall_args[0]));
+      f->eax = sys_mkdir(*((const char **) syscall_args[0]));
+      break;
+    case SYS_READDIR:
+      check_valid_syscall_args(syscall_args, 2);
+      check_valid_user_buffer(*((const void **) syscall_args[1]),
+                              READDIR_MAX_LEN + 1);
+      f->eax = sys_readdir(*((int *) syscall_args[0]),
+                           *((char **) syscall_args[1]));
+      break;
+    case SYS_ISDIR:
+      check_valid_syscall_args(syscall_args, 1);
+      f->eax = sys_isdir(*((int *) syscall_args[0]));
+      break;
+    case SYS_INUMBER:
+      check_valid_syscall_args(syscall_args, 1);
+      f->eax = sys_inumber(*((int *) syscall_args[0]));
+      break;
     default:
-      // Todo: implement more in project 3 and 4
+      // Todo: PANIC.
       break;
   }
 }
@@ -266,15 +299,15 @@ sys_remove(const char *file) {
 static int
 sys_open(const char* filename) {
   lock_acquire(&filesys_lock);
+  /* At least one in _FILE and DIR is NULL. */
   struct file *_file = filesys_open(filename);
   struct dir* dir=filesys_opendir(filename);
   lock_release(&filesys_lock);
 
-  /* Return -1 if the file could not be opened. */
-  if (_file == NULL)
+  /* Return -1 if the file or directory could not be opened. */
+  if (_file == NULL && dir == NULL)
     return -1;
 
-  /* Malfunction until malloc() is implemented. */
   struct file_descriptor *fd = malloc(sizeof(struct file_descriptor));
   fd->fd = thread_current()->fd_num++;
   strlcpy(fd->file_name, filename, strlen(filename));
@@ -387,26 +420,115 @@ sys_close(int fd) {
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
-  if (_fd->_file == NULL) {
+  if (_fd->_file == NULL)       /* FD designates a directory. */
     dir_close(_fd->_dir);
-  } else {
+  else if (_fd->_dir == NULL)   /* FD designates a file. */
     file_close(_fd->_file);
-  }
+  else
+    ASSERT(false)
   lock_release(&filesys_lock);
 
   list_remove(&(_fd->elem));
   free(_fd);
 }
-static bool sys_chdir(const char* dir){
-  struct dir* target_dir=filesys_opendir(dir);
+
+static bool
+sys_chdir(const char *dir) {
+  lock_acquire(&filesys_lock);
+  /* Open the new directory. */
+  struct dir *target_dir = filesys_opendir(dir);
   if (target_dir == NULL) {
     return false;
   }
+  /* Close the old directory. */
   dir_close(thread_current()->current_dir);
-  thread_current()->current_dir=target_dir;
+  /* Set the current_dir of the current thread to the new directory. */
+  thread_current()->current_dir = target_dir;
+  lock_release(&filesys_lock);
   return true;
 }
-static bool sys_mkdir(const char* dir){
 
+static bool
+sys_mkdir(const char* dir){
+  lock_acquire(&filesys_lock);
+  // Todo: question: is "mkdir a pure directory" valid?
+
+  struct dir *d = NULL;
+  char dir_name_buffer[20];
+  char *dir_name = dir_name_buffer;
+  bool is_dir = false;
+
+  bool success = false;
+  if (path_parser(dir, &d, &dir_name, &is_dir)) {
+    /* Assert that dir is not a pure directory. Otherwise error will occur
+     * in path_parser().
+     */
+    if (!is_dir) {
+      /* Create a subdirectory in D. */
+      success = subdir_create(d, dir_name);
+    }
+  }
+  dir_close(d);
+
+  lock_release(&filesys_lock);
+  return success;
+}
+
+static bool
+sys_readdir(int fd, char *name) {
+  /* FD 0 and 1 are not readable. */
+  if (fd == 0 || fd == 1)
+    return false;
+
+  lock_acquire(&filesys_lock);
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Return false if fd is not opened by the current thread, or fd is not
+   * a directory.
+   */
+  if (_fd == NULL || !is_dir_file(_fd)) {
+    lock_release(&filesys_lock);
+    return false;
+  }
+
+  bool res = dir_readdir(_fd->_dir, name);
+  lock_release(&filesys_lock);
+  return res;
+}
+
+static bool
+sys_isdir(int fd) {
+  /* FD 0 and 1 are not directory. */
+  if (fd == 0 || fd == 1)
+    return false;
+
+  lock_acquire(&filesys_lock);
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Return false if fd is not opened by the current thread, or fd is not
+   * a directory.
+   */
+  if (_fd == NULL || !is_dir_file(_fd)) {
+    lock_release(&filesys_lock);
+    return false;
+  } else {
+    lock_release(&filesys_lock);
+    return true;
+  }
+}
+
+static int
+sys_inumber(int fd) {
+  /* FD 0 and 1 are not directory. */
+  if (fd == 0 || fd == 1)
+    sys_exit(-1);
+
+  lock_acquire(&filesys_lock);
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Return false if fd is not opened by the current thread. */
+  if (_fd == NULL)
+    sys_exit(-1);
+
+  int res = inode_get_inumber(file_get_inode(_fd->_file));
+  lock_release(&filesys_lock);
+  return res;
 }
 /* Ruihang End */
