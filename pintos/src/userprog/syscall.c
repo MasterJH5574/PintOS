@@ -409,12 +409,12 @@ syscall_handler (struct intr_frame *f UNUSED)
       unpin_buffer(*((const void **) syscall_args[1]), READDIR_MAX_LEN + 1);
       break;
     case SYS_ISDIR:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       f->eax = sys_isdir(*((int *) syscall_args[0]));
       unpin_syscall_args(syscall_args, 1);
       break;
     case SYS_INUMBER:
-      check_valid_syscall_args(syscall_args, 1);
+      check_valid_syscall_args(syscall_args, 1, esp);
       f->eax = sys_inumber(*((int *) syscall_args[0]));
       unpin_syscall_args(syscall_args, 1);
       break;
