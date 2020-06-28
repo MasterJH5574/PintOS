@@ -5,28 +5,36 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
-
-/* A directory. */
-struct dir 
-  {
-    struct inode *inode;                /* Backing store. */
-    off_t pos;                          /* Current position. */
-  };
-
-/* A single directory entry. */
-struct dir_entry 
-  {
-    block_sector_t inode_sector;        /* Sector number of header. */
-    char name[NAME_MAX + 1];            /* Null terminated file name. */
-    bool in_use;                        /* In use or free? */
-  };
+#include "filesys/free-map.h"
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  bool success = inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  if (success) {
+    struct inode *inode = inode_open(sector);
+    ASSERT(inode != NULL)
+    inode_set_dir(inode);
+
+    struct dir *dir = dir_open(inode);
+    ASSERT(dir != NULL)
+
+    /* Add ".", which points to the directory itself. */
+    bool add_success = dir_add(dir, ".", sector);
+    ASSERT(add_success)
+
+    if (sector == ROOT_DIR_SECTOR) {
+      /* If the directory is root directory, add ".." which points to itself. */
+      add_success = dir_add(dir, "..", sector);
+      ASSERT(add_success)
+    }
+
+    inode_close(inode);
+    dir_close(dir);
+  }
+  return success;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -38,7 +46,7 @@ dir_open (struct inode *inode)
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
-      dir->pos = 0;
+      dir->pos = DIR_BASE_ENTRIES_NUM * sizeof(struct dir_entry);
       return dir;
     }
   else
@@ -174,6 +182,24 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
+  /* If successfully add, and the added is a directory which is not "." or "..",
+   * add the subdirectory ".." to it.
+   */
+  if (success && inode_sector != inode_get_inumber(dir->inode) && !name_is_basic_dir(name)) {
+    /* Check whether DIR->INODE is a directory. */
+    struct inode* sub_inode;
+    sub_inode = inode_open (inode_sector);
+
+    if (inode_isdir(sub_inode)) {
+      /* Add ".." to it. */
+      struct dir *sub_dir = dir_open(sub_inode);
+      bool add_success = dir_add(sub_dir, "..", inode_get_inumber(dir->inode));
+      ASSERT(add_success)
+      dir_close (sub_dir);
+    }
+    inode_close (sub_inode);
+  }
+
  done:
   return success;
 }
@@ -234,3 +260,148 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+/* ZYHowell: subdir*/
+/* Find the subdirectory designated by NAME in directory CUR.
+ * Find it, open it, and then return it.
+ * If there is no subdirectory named NAME, return NULL.
+ */
+struct dir*
+subdir_lookup(struct dir *cur, char *name)
+{
+  if (cur == NULL || name == NULL || strlen(name) == 0) return NULL; //or ASSERT?
+  struct inode *node = NULL;
+  if (!dir_lookup(cur, name, &node)) return NULL;
+  if (!inode_isdir(node)) {
+    inode_close(node);
+    return NULL;
+  }
+  return dir_open(node);
+}
+
+/* Create a subdirectory named NAME in directory CUR.
+ * Return whether the creation is successful.
+ */
+bool subdir_create(struct dir *cur, char *name) {
+  if (cur == NULL || name == NULL || strlen(name) == 0) return false; //or ASSERT?
+  block_sector_t sector = (block_sector_t) -1;
+  bool success = free_map_allocate(1, &sector)
+              && dir_create(sector, 0)
+              && dir_add(cur, name, sector);
+  if (!success && sector != ((block_sector_t) -1)) free_map_release(sector,1);
+  return success; 
+}
+
+/* Delete the subdirectory designated by NAME in the directory CUR.
+ * Return whether the deletion is successful.
+ * Return false, if
+ *  - there is no subdirectory named NAME,
+ *  - or if the inode designated by NAME is not a subdirectory,
+ *  - or if the subdirectory NAME is not empty.
+ */
+bool subdir_delete(struct dir *cur, char *name) {
+  if (cur == NULL || name == NULL || strlen(name) == 0) return false;
+
+  /* Lookup the subdirectory designated by NAME. Return false if not found. */
+  struct dir *dir_to_be_removed = subdir_lookup(cur, name);
+  if (dir_to_be_removed == NULL)
+    return false;
+
+  struct inode *node = dir_to_be_removed->inode;
+  ASSERT(inode_isdir(node))
+
+  /* Return false if the directory is opened by others. */
+  if (inode_get_opencnt(node) > 1)
+    return false;
+
+  char* buffer = malloc(NAME_MAX + 1);
+  if (dir_readdir(dir_to_be_removed, buffer)) { // remove empty directory only.
+    dir_close(cur);
+    dir_close(dir_to_be_removed);
+    free(buffer);
+    return false;
+  }
+  free(buffer);
+  dir_close(dir_to_be_removed);
+  return dir_remove(cur, name);
+}
+
+/*Jiaxin Begin*/
+/* Create a file with name FILE_NAME and initial size INITIAL_SIZE in
+ * the directory DIR.
+ */
+bool
+subfile_create(struct dir* dir, char* file_name, off_t initial_size)
+{
+  ASSERT(file_name != NULL);
+  if (strlen(file_name) == 0)
+    return false;
+  if (dir == NULL)
+    return false;
+  block_sector_t block_sector = (block_sector_t) -1;
+  bool success = free_map_allocate(1, &block_sector)
+              && inode_create(block_sector, initial_size)
+              && dir_add(dir, file_name, block_sector);
+  if (!success && block_sector != (block_sector_t) -1)
+    free_map_release(block_sector, 1);
+  return success;
+}
+
+/* Remove the file named FILE_NAME in the directory DIR.
+ * Return false if there is no file FILE_NAME or the found inode is a directory.
+ */
+bool
+subfile_remove(struct dir* dir, char* file_name)
+{
+  ASSERT(dir != NULL);
+  ASSERT(file_name != NULL);
+  if (strlen(file_name) == 0)
+    return false;
+  struct inode* inode = NULL;
+  bool ret = dir_lookup(dir, file_name, &inode);
+  if (!ret || inode == NULL)
+    return false;
+  if (inode_isdir(inode))
+  {
+    inode_close(inode);
+    return false;
+  }
+  inode_close(inode);
+  return dir_remove(dir, file_name);
+}
+
+/* Find the file named FILE_NAME in the directory DIR.
+ * Return NULL if there is no file FILE_NAME or the found inode is a directory.
+ */
+struct file *
+subfile_lookup(struct dir* dir, char* file_name)
+{
+  ASSERT(dir != NULL);
+  ASSERT(file_name != NULL);
+  if (strlen(file_name) == 0)
+    return false;
+  struct inode* inode = NULL;
+  bool ret = dir_lookup(dir, file_name, &inode);
+  if (!ret || inode == NULL)
+    return false;
+  if (inode_isdir(inode))
+  {
+    inode_close(inode);
+    return false;
+  }
+  struct file* file = file_open(inode);
+  return file;
+}
+
+bool
+dir_is_root_dir(struct dir *dir) {
+  return inode_is_root(dir->inode);
+}
+
+bool
+name_is_basic_dir(const char *name) {
+  uint32_t len = strlen(name);
+  return (len == 1 && name[0] == '.')
+         || (len == 2 && name[0] == '.' && name[1] == '.');
+}
+/*Jiaxin End*/

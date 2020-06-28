@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
+#include "filesys/cache.h"
 
 struct bitmap;
 
@@ -19,5 +20,10 @@ off_t inode_write_at (struct inode *, const void *, off_t size, off_t offset);
 void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
+
+bool inode_is_root(struct inode *inode);
+bool inode_isdir(struct inode*);
+void inode_set_dir(struct inode*);
+int inode_get_opencnt(struct inode* inode);
 
 #endif /* filesys/inode.h */

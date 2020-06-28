@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixReal.h"
+#include "filesys/directory.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -193,6 +194,13 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+#ifdef FILESYS
+  /*Jiaxin Begin*/
+  /*set the current_dir for filesys*/
+  t->current_dir = thread_current()->current_dir;
+  /*Jiaxin End*/
+#endif
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -743,7 +751,10 @@ allocate_tid (void)
 
   return tid;
 }
-
+void set_initial_directory () {
+  initial_thread->current_dir=dir_open_root();
+}
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

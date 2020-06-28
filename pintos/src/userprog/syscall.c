@@ -10,6 +10,8 @@
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "threads/synch.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -40,6 +42,13 @@ static mapid_t sys_mmap(int fd, void *addr);
 static void sys_munmap(mapid_t mapping);
 
 static bool is_valid_user_addr(void *addr);
+
+/* System calls for filesystem. */
+static bool sys_chdir(const char *dir);
+static bool sys_mkdir(const char *dir);
+static bool sys_readdir(int fd, char *name);
+static bool sys_isdir(int fd);
+static int sys_inumber(int fd);
 /* ------ Declarations of System Calls End ------ */
 
 
@@ -376,9 +385,41 @@ syscall_handler (struct intr_frame *f UNUSED)
       sys_munmap(*((mapid_t *)syscall_args[0]));
       unpin_syscall_args(syscall_args, 1);
       break;
-    default:
-      // Todo: implement more in project 4
+    case SYS_CHDIR:
+      check_valid_syscall_args(syscall_args, 1, esp);
+      check_valid_user_string(*((const char **) syscall_args[0]), esp);
+      f->eax = sys_chdir(*((const char **) syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
+      unpin_string(*((const char **) syscall_args[0]));
       break;
+    case SYS_MKDIR:
+      check_valid_syscall_args(syscall_args, 1, esp);
+      check_valid_user_string(*((const char **) syscall_args[0]), esp);
+      f->eax = sys_mkdir(*((const char **) syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
+      unpin_string(*((const char **) syscall_args[0]));
+      break;
+    case SYS_READDIR:
+      check_valid_syscall_args(syscall_args, 2, esp);
+      check_valid_user_buffer(*((const void **) syscall_args[1]),
+                              READDIR_MAX_LEN + 1, esp, true);
+      f->eax = sys_readdir(*((int *) syscall_args[0]),
+                           *((char **) syscall_args[1]));
+      unpin_syscall_args(syscall_args, 2);
+      unpin_buffer(*((const void **) syscall_args[1]), READDIR_MAX_LEN + 1);
+      break;
+    case SYS_ISDIR:
+      check_valid_syscall_args(syscall_args, 1, esp);
+      f->eax = sys_isdir(*((int *) syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
+      break;
+    case SYS_INUMBER:
+      check_valid_syscall_args(syscall_args, 1, esp);
+      f->eax = sys_inumber(*((int *) syscall_args[0]));
+      unpin_syscall_args(syscall_args, 1);
+      break;
+    default:
+      ASSERT(false)
   }
 
   unpin_syscall_number(f->esp);
@@ -425,7 +466,7 @@ sys_wait(pid_t pid) {
 }
 
 /* Ruihang Begin */
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_create(const char *file, unsigned initialize_size) {
   lock_acquire(&filesys_lock);
   bool res = filesys_create(file, initialize_size);
@@ -433,7 +474,7 @@ sys_create(const char *file, unsigned initialize_size) {
   return res;
 }
 
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_remove(const char *file) {
   lock_acquire(&filesys_lock);
   int res = filesys_remove(file);
@@ -441,32 +482,37 @@ sys_remove(const char *file) {
   return res;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_open(const char* filename) {
   lock_acquire(&filesys_lock);
+  /* At least one in _FILE and DIR is NULL. */
   struct file *_file = filesys_open(filename);
+  struct dir* dir=filesys_opendir(filename);
   lock_release(&filesys_lock);
 
-  /* Return -1 if the file could not be opened. */
-  if (_file == NULL)
+  /* Return -1 if the file or directory could not be opened. */
+  if (_file == NULL && dir == NULL)
     return -1;
 
-  /* Malfunction until malloc() is implemented. */
   struct file_descriptor *fd = malloc(sizeof(struct file_descriptor));
   fd->fd = thread_current()->fd_num++;
   strlcpy(fd->file_name, filename, strlen(filename));
   fd->_file = _file;
+  fd->_dir=dir;
   fd->owner_thread = thread_current();
   list_push_back(&(thread_current()->file_descriptors), &(fd->elem));
 
   return fd->fd;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_filesize(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-  /* Terminate if fd is not opened by the current thread. */
-  if (_fd == NULL)
+  /* Terminate if
+   *  - FD is not opened by the current thread, or
+   *  - the inode designated by _FD is a directory.
+   */
+  if (_fd == NULL || file_descriptor_is_dir(_fd))
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
@@ -475,7 +521,7 @@ sys_filesize(int fd) {
   return filesize;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_read(int fd, void *buffer, unsigned size) {
   /* If fd represent the stdout, terminate. */
   if (fd == STDOUT_FILENO)
@@ -494,9 +540,14 @@ sys_read(int fd, void *buffer, unsigned size) {
   } else {
     /* Read from file. */
     struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-    /* Terminate if fd is not opened by the current thread. */
+    /* Terminate or return -1 if
+     *  - FD is not opened by the current thread, or
+     *  - the inode designated by _FD is a directory.
+     */
     if (_fd == NULL)
       sys_exit(-1);
+    if (file_descriptor_is_dir(_fd))
+      return -1;
 
     lock_acquire(&filesys_lock);
     res = file_read(_fd->_file, buffer, size);
@@ -505,7 +556,7 @@ sys_read(int fd, void *buffer, unsigned size) {
   return (int)res;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_write(int fd, const void *buffer, unsigned size) {
   /* If fd represent stdin, terminate. */
   if (fd == STDIN_FILENO)
@@ -519,9 +570,14 @@ sys_write(int fd, const void *buffer, unsigned size) {
   } else {
     /* Write to file. */
     struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-    /* Terminate if fd is not opened by the current thread. */
+    /* Terminate or return -1 if
+     *  - FD is not opened by the current thread, or
+     *  - the inode designated by _FD is a directory.
+     */
     if (_fd == NULL)
       sys_exit(-1);
+    if (file_descriptor_is_dir(_fd))
+      return -1;
 
     lock_acquire(&filesys_lock);
     res = file_write(_fd->_file, buffer, size);
@@ -530,11 +586,14 @@ sys_write(int fd, const void *buffer, unsigned size) {
   return (int)res;
 }
 
-static void
+static void __attribute__((optimize("-O0")))
 sys_seek(int fd, unsigned position) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-  /* Terminate if fd is not opened by the current thread. */
-  if (_fd == NULL)
+  /* Terminate if
+   *  - FD is not opened by the current thread, or
+   *  - the inode designated by _FD is a directory.
+   */
+  if (_fd == NULL || file_descriptor_is_dir(_fd))
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
@@ -542,11 +601,14 @@ sys_seek(int fd, unsigned position) {
   lock_release(&filesys_lock);
 }
 
-static unsigned
+static unsigned __attribute__((optimize("-O0")))
 sys_tell(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
-  /* Terminate if fd is not opened by the current thread. */
-  if (_fd == NULL)
+  /* Terminate if
+   *  - FD is not opened by the current thread, or
+   *  - the inode designated by _FD is a directory.
+   */
+  if (_fd == NULL || file_descriptor_is_dir(_fd))
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
@@ -555,7 +617,7 @@ sys_tell(int fd) {
   return res;
 }
 
-static void
+static void __attribute__((optimize("-O0")))
 sys_close(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
   /* Terminate if fd is not opened by the current thread. */
@@ -563,7 +625,12 @@ sys_close(int fd) {
     sys_exit(-1);
 
   lock_acquire(&filesys_lock);
-  file_close(_fd->_file);
+  if (_fd->_file == NULL)       /* FD designates a directory. */
+    dir_close(_fd->_dir);
+  else if (_fd->_dir == NULL)   /* FD designates a file. */
+    file_close(_fd->_file);
+  else
+    ASSERT(false)
   lock_release(&filesys_lock);
 
   list_remove(&(_fd->elem));
@@ -654,5 +721,109 @@ sys_munmap(mapid_t mapping) {
 static bool
 is_valid_user_addr(void *addr) {
   return addr >= USER_ADDR_START && addr < PHYS_BASE;
+}
+
+static bool __attribute__((optimize("-O0")))
+sys_chdir(const char *dir) {
+  lock_acquire(&filesys_lock);
+  /* Open the new directory. */
+  struct thread *cur_thread = thread_current();
+  struct dir *target_dir = filesys_opendir(dir);
+  if (target_dir == NULL) {
+    return false;
+  }
+  /* Close the old directory. */
+  dir_close(cur_thread->current_dir);
+  /* Set the current_dir of the current thread to the new directory. */
+  cur_thread->current_dir = target_dir;
+  lock_release(&filesys_lock);
+  return true;
+}
+
+static bool __attribute__((optimize("-O0")))
+sys_mkdir(const char* dir){
+  lock_acquire(&filesys_lock);
+
+  struct dir *d = NULL;
+  char dir_name_buffer[20];
+  char *dir_name = dir_name_buffer;
+  bool is_dir = false;
+
+  bool success = false;
+  if (path_parser(dir, &d, &dir_name, &is_dir)) {
+    /* If DIR designates the root directory, just return false. */
+    if (is_dir && dir_name[0] == '\0') {
+      success = false;
+    } else {
+      /* Create a subdirectory in D. */
+      success = subdir_create(d, dir_name);
+    }
+  }
+  dir_close(d);
+
+  lock_release(&filesys_lock);
+  return success;
+}
+
+static bool __attribute__((optimize("-O0")))
+sys_readdir(int fd, char *name) {
+  /* FD 0 and 1 are not readable. */
+  if (fd == 0 || fd == 1)
+    return false;
+
+  lock_acquire(&filesys_lock);
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Return false if fd is not opened by the current thread, or fd is not
+   * a directory.
+   */
+  if (_fd == NULL || !file_descriptor_is_dir(_fd)) {
+    lock_release(&filesys_lock);
+    return false;
+  }
+
+  bool res = dir_readdir(_fd->_dir, name);
+  lock_release(&filesys_lock);
+  return res;
+}
+
+static bool __attribute__((optimize("-O0")))
+sys_isdir(int fd) {
+  /* FD 0 and 1 are not directory. */
+  if (fd == 0 || fd == 1)
+    return false;
+
+  lock_acquire(&filesys_lock);
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Return false if fd is not opened by the current thread, or fd is not
+   * a directory.
+   */
+  if (_fd == NULL || !file_descriptor_is_dir(_fd)) {
+    lock_release(&filesys_lock);
+    return false;
+  } else {
+    lock_release(&filesys_lock);
+    return true;
+  }
+}
+
+static int __attribute__((optimize("-O0")))
+sys_inumber(int fd) {
+  /* FD 0 and 1 are not directory. */
+  if (fd == 0 || fd == 1)
+    sys_exit(-1);
+
+  lock_acquire(&filesys_lock);
+  struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
+  /* Return false if fd is not opened by the current thread. */
+  if (_fd == NULL)
+    sys_exit(-1);
+
+  int res = -1;
+  if (file_descriptor_is_dir(_fd))
+    res = inode_get_inumber(_fd->_dir->inode);
+  else
+    res = inode_get_inumber(file_get_inode(_fd->_file));
+  lock_release(&filesys_lock);
+  return res;
 }
 /* Ruihang End */
