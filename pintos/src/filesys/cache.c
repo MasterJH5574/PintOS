@@ -18,7 +18,8 @@ static bool cache_hash_less_func(const hash_elem *a, const hash_elem *b,
                                  void *aux) {
   return cache_hash_func(a, NULL) < cache_hash_func(b, NULL);
 }
-void cache_init() {
+
+void  __attribute__((optimize("-O0")))cache_init() {
   list_init(&lru_list);
   hash_init(&lru_hash, cache_hash_func, cache_hash_less_func, NULL);
 }

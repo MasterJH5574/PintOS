@@ -47,11 +47,17 @@ struct inode
 
   static bool get_new_table_page(block_sector_t* sector,int initialized){
     bool success=free_map_allocate(1,sector);
+    if (!success) {
+      return false;
+    }
     inode_table_disk table_buffer;
     table_buffer.next_block=-1;
     for (int j = 0; j < PTR_NUM_BLOCK && success; j++) {
       if(j<initialized) {
         success&=free_map_allocate(1, &table_buffer.ptr[j]);
+        if (!success) {
+          break;
+        }
         cache_write(table_buffer.ptr[j], zeros);
       } else {
         table_buffer.ptr[j]=-1;
