@@ -177,8 +177,8 @@ inode_create (block_sector_t sector, off_t length)
         if(i!=0){
           cache_write(prev_ptr, &table_buffer);
         }
-        cache_read(*next_ptr,&table_buffer);
         prev_ptr=*next_ptr;
+        cache_read(*next_ptr,&table_buffer);
       }
       cache_write(sector,disk_inode);
       free (disk_inode);
