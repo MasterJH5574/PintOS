@@ -280,7 +280,7 @@ sys_wait(pid_t pid) {
 }
 
 /* Ruihang Begin */
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_create(const char *file, unsigned initialize_size) {
   lock_acquire(&filesys_lock);
   bool res = filesys_create(file, initialize_size);
@@ -288,7 +288,7 @@ sys_create(const char *file, unsigned initialize_size) {
   return res;
 }
 
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_remove(const char *file) {
   lock_acquire(&filesys_lock);
   int res = filesys_remove(file);
@@ -296,7 +296,7 @@ sys_remove(const char *file) {
   return res;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_open(const char* filename) {
   lock_acquire(&filesys_lock);
   /* At least one in _FILE and DIR is NULL. */
@@ -319,7 +319,7 @@ sys_open(const char* filename) {
   return fd->fd;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_filesize(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
   /* Terminate if
@@ -335,7 +335,7 @@ sys_filesize(int fd) {
   return filesize;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_read(int fd, void *buffer, unsigned size) {
   /* If fd represent the stdout, terminate. */
   if (fd == STDOUT_FILENO)
@@ -370,7 +370,7 @@ sys_read(int fd, void *buffer, unsigned size) {
   return (int)res;
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_write(int fd, const void *buffer, unsigned size) {
   /* If fd represent stdin, terminate. */
   if (fd == STDIN_FILENO)
@@ -400,7 +400,7 @@ sys_write(int fd, const void *buffer, unsigned size) {
   return (int)res;
 }
 
-static void
+static void __attribute__((optimize("-O0")))
 sys_seek(int fd, unsigned position) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
   /* Terminate if
@@ -415,7 +415,7 @@ sys_seek(int fd, unsigned position) {
   lock_release(&filesys_lock);
 }
 
-static unsigned
+static unsigned __attribute__((optimize("-O0")))
 sys_tell(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
   /* Terminate if
@@ -431,7 +431,7 @@ sys_tell(int fd) {
   return res;
 }
 
-static void
+static void __attribute__((optimize("-O0")))
 sys_close(int fd) {
   struct file_descriptor *_fd = get_file_descriptor(thread_current(), fd);
   /* Terminate if fd is not opened by the current thread. */
@@ -451,23 +451,24 @@ sys_close(int fd) {
   free(_fd);
 }
 
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_chdir(const char *dir) {
   lock_acquire(&filesys_lock);
   /* Open the new directory. */
+  struct thread *cur_thread = thread_current();
   struct dir *target_dir = filesys_opendir(dir);
   if (target_dir == NULL) {
     return false;
   }
   /* Close the old directory. */
-  dir_close(thread_current()->current_dir);
+  dir_close(cur_thread->current_dir);
   /* Set the current_dir of the current thread to the new directory. */
-  thread_current()->current_dir = target_dir;
+  cur_thread->current_dir = target_dir;
   lock_release(&filesys_lock);
   return true;
 }
 
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_mkdir(const char* dir){
   lock_acquire(&filesys_lock);
 
@@ -492,7 +493,7 @@ sys_mkdir(const char* dir){
   return success;
 }
 
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_readdir(int fd, char *name) {
   /* FD 0 and 1 are not readable. */
   if (fd == 0 || fd == 1)
@@ -513,7 +514,7 @@ sys_readdir(int fd, char *name) {
   return res;
 }
 
-static bool
+static bool __attribute__((optimize("-O0")))
 sys_isdir(int fd) {
   /* FD 0 and 1 are not directory. */
   if (fd == 0 || fd == 1)
@@ -533,7 +534,7 @@ sys_isdir(int fd) {
   }
 }
 
-static int
+static int __attribute__((optimize("-O0")))
 sys_inumber(int fd) {
   /* FD 0 and 1 are not directory. */
   if (fd == 0 || fd == 1)

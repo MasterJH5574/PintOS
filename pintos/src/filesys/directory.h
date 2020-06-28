@@ -58,5 +58,6 @@ struct file *subfile_lookup(struct dir*, char* file_name);
 
 /* Some checks. */
 bool dir_is_root_dir(struct dir *dir);
+bool name_is_basic_dir(const char *str);
 
 #endif /* filesys/directory.h */

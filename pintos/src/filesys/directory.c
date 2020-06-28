@@ -12,8 +12,7 @@
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  bool success = inode_create (sector, (DIR_BASE_ENTRIES_NUM + entry_cnt)
-                               * sizeof (struct dir_entry));
+  bool success = inode_create (sector, entry_cnt * sizeof (struct dir_entry));
   if (success) {
     struct inode *inode = inode_open(sector);
     ASSERT(inode != NULL)
@@ -21,9 +20,16 @@ dir_create (block_sector_t sector, size_t entry_cnt)
 
     struct dir *dir = dir_open(inode);
     ASSERT(dir != NULL)
-    bool add1 = dir_add(dir, ".", sector);
-    bool add2 = dir_add(dir, "..", sector);
-    ASSERT(add1 && add2)
+
+    /* Add ".", which points to the directory itself. */
+    bool add_success = dir_add(dir, ".", sector);
+    ASSERT(add_success)
+
+    if (sector == ROOT_DIR_SECTOR) {
+      /* If the directory is root directory, add ".." which points to itself. */
+      add_success = dir_add(dir, "..", sector);
+      ASSERT(add_success)
+    }
 
     inode_close(inode);
     dir_close(dir);
@@ -175,6 +181,24 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+
+  /* If successfully add, and the added is a directory which is not "." or "..",
+   * add the subdirectory ".." to it.
+   */
+  if (success && inode_sector != inode_get_inumber(dir->inode) && !name_is_basic_dir(name)) {
+    /* Check whether DIR->INODE is a directory. */
+    struct inode* sub_inode;
+    sub_inode = inode_open (inode_sector);
+
+    if (inode_isdir(sub_inode)) {
+      /* Add ".." to it. */
+      struct dir *sub_dir = dir_open(sub_inode);
+      bool add_success = dir_add(sub_dir, "..", inode_get_inumber(dir->inode));
+      ASSERT(add_success)
+      dir_close (sub_dir);
+    }
+    inode_close (sub_inode);
+  }
 
  done:
   return success;
@@ -372,5 +396,12 @@ subfile_lookup(struct dir* dir, char* file_name)
 bool
 dir_is_root_dir(struct dir *dir) {
   return inode_is_root(dir->inode);
+}
+
+bool
+name_is_basic_dir(const char *name) {
+  uint32_t len = strlen(name);
+  return (len == 1 && name[0] == '.')
+         || (len == 2 && name[0] == '.' && name[1] == '.');
 }
 /*Jiaxin End*/
