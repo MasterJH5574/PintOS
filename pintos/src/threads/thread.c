@@ -752,7 +752,9 @@ allocate_tid (void)
   return tid;
 }
 void set_initial_directory () {
+#ifdef FILESYS
   initial_thread->current_dir=dir_open_root();
+#endif
 }
 
 /* Offset of `stack' member within `struct thread'.
