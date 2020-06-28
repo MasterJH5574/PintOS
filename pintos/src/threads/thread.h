@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "synch.h"
 #include "fixReal.h"
+#include "vm/page.h"
 #include "filesys/file.h"
 
 /* States in a thread's life cycle. */
@@ -119,6 +120,18 @@ struct thread
     struct file *cur_file;              //current executable file
     /*Jiaxin End*/
 #endif
+
+    /* Ruihang Begin */
+#ifdef VM
+    page_table_t page_table;            /* Supplemental page table. */
+    /*Jiaxin Begin*/
+    void *esp;                          /*Save esp of this thread*/
+    /*Jiaxin End*/
+
+    mapid_t md_num;                     /* Number of mmap descriptors. */
+    struct list mmap_descriptors;       /* List of mmap descriptors. */
+#endif
+    /* Ruihang End */
 
 #ifdef FILESYS
     struct dir* current_dir;

@@ -149,6 +149,17 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+#ifdef VM
+  /*Jiaxin Begin: handel the page_fault*/
+  if (not_present && page_fault_handler(fault_addr, write, user ? f->esp : thread_current()->esp))
+  {
+    return;
+  } else {
+    sys_exit(-1);
+  }
+  /*Jiaxin End*/
+#endif
+
   /* Ruihang Begin: If the page fault is invoked by user program, terminate. */
   if (user)
     sys_exit(-1);

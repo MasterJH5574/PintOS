@@ -308,7 +308,6 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
   /*Jiaxin Begin*/
   struct list_elem *e;
   struct thread *cur_thread = thread_current();
@@ -326,6 +325,16 @@ thread_exit (void)
     struct lock *_lock = list_entry(e, struct lock, elem);
     lock_release(_lock);
   }
+  /* Ruihang End */
+
+  /* Ruihang Begin */
+#ifdef VM
+  /* Unmap all mmaped files. */
+  for (int i = 0; i < cur_thread->md_num; i++)
+    page_table_remove_mmap(&cur_thread->mmap_descriptors, i);
+  /* Destroy pate_table. */
+  page_table_destroy(&cur_thread->page_table);
+#endif
   /* Ruihang End */
 
   /*Jiaxin Begin*/
@@ -355,6 +364,8 @@ thread_exit (void)
   if (cur_thread != initial_thread)
     list_remove(&cur_thread->child_elem);
   /*Jiaxin End*/
+
+  process_exit ();
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -618,6 +629,11 @@ init_thread (struct thread *t, const char *name, int priority)
 
   sema_init(&t->waited_by_parent, 0);
   sema_init(&t->exit_sem, 0);
+#endif
+
+#ifdef VM
+  t->md_num = 0;
+  list_init(&t->mmap_descriptors);
 #endif
 }
 
