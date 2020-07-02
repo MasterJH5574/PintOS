@@ -180,6 +180,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  list_remove(&cur->exec_open_elem);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -385,7 +386,7 @@ load (char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
-
+  inode_add_thread_open(file->inode,thread_current());
   /* Set up stack. */
   if (!setup_stack (esp, argc, argv))
     goto done;
@@ -489,6 +490,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       uint8_t *kpage;
       if (list_size(&file->inode->threads_open) == 0) {
         kpage = frame_get_frame(0, upage);
+        //todo:mmap the executable to memory
+  
       } else{
         thread* open_thread=inode_get_open_thread(file->inode);
         struct page_table_entry* pte=pte_find(&open_thread->page_table,upage,false);
@@ -504,7 +507,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           ASSERT(false);
         }
       }
-      inode_add_thread_open(file->inode,thread_current());
       
       #else
       uint8_t *kpage = palloc_get_page(PAL_USER);
