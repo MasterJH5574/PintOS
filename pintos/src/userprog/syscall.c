@@ -698,7 +698,7 @@ sys_mmap(int fd, void *addr) {
     ASSERT(page_table_map_file_page(file, ofs, addr,
                                   page_read_bytes,
                                   page_zero_bytes,
-                                  true))
+                                  true, true))
 
     read_bytes -= page_read_bytes;
     ofs += page_read_bytes;

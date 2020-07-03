@@ -490,7 +490,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (list_size(&file->inode->threads_open) == 0) {
         if(!writable) {
           if (!page_table_map_file_page(file, ofs, upage, page_read_bytes,
-                                        page_zero_bytes, writable)) {
+                                        page_zero_bytes, writable, false)) {
             return false;
           }
           skip=true;
@@ -516,7 +516,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         } else if (pte->status == FILE) {
           if(!page_table_map_file_page(file,ofs,upage,page_read_bytes,
                                         page_zero_bytes,
-                                    writable)){
+                                    writable, false)){
             return false;
           }
           skip=true;

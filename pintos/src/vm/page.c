@@ -153,7 +153,8 @@ page_table_map_file_page(struct file *file,
                               uint32_t *upage,
                               uint32_t read_bytes,
                               uint32_t zero_bytes,
-                              bool writable) {
+                              bool writable,
+                              bool is_mmap) {
   /* Assert that UPAGE is page-aligned. */
   ASSERT(pg_ofs(upage) == 0)
   struct thread *cur_thread = thread_current();
@@ -173,7 +174,8 @@ page_table_map_file_page(struct file *file,
   pte->zero_bytes = zero_bytes;
 
   struct mmap_descriptor *md = malloc(sizeof(struct mmap_descriptor));
-  md->mapid = cur_thread->md_num;
+  /* -1 means that this MD comes from code segment in ELF. */
+  md->mapid = is_mmap ? cur_thread->md_num : -1;
   md->pte = pte;
   list_push_back(&cur_thread->mmap_descriptors, &md->elem);
 
