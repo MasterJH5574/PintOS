@@ -163,8 +163,9 @@ page_fault (struct intr_frame *f)
     sys_exit(-1);
   }
   /*Jiaxin End*/
-#endif
+#else 
   lock_release(&page_fault_mutex);
+#endif
   /* Ruihang Begin: If the page fault is invoked by user program, terminate. */
   if (user)
     sys_exit(-1);
