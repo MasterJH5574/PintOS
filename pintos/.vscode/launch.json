@@ -5,7 +5,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/src/threads/build/kernel.o",
+            "program": "${workspaceFolder}/src/filesys/build/kernel.o",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

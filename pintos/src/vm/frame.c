@@ -115,6 +115,12 @@ bool frame_add_thread(void *frame, thread *t) {
   if (elem == NULL) PANIC("invalid frame");
   info = hash_entry(elem, struct frame_info, elem);
 
+  frame_thread tmpFT;
+  tmpFT.value = t;
+  if (hash_find(&info->thread_hash, &tmpFT.hash_e)) {
+    lock_release(&mutex);
+    return false;
+  }
   frame_thread *th = malloc(sizeof(frame_thread));
   th->value = t;
   hash_insert(&info->thread_hash, &th->hash_e);
@@ -134,6 +140,8 @@ bool frame_remove_thread(void *frame, thread *t) {
   thtmp.value = t;
   elem = hash_find(&info->thread_hash, &thtmp.hash_e);
   if (elem == NULL) {
+    PANIC("remove a thread not in the frame");
+    lock_release(&mutex);
     return false; //no such thread in the frame, maybe a panic?
   }
   thInfo = hash_entry(elem, struct frame_thread, hash_e);

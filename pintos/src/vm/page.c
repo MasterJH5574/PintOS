@@ -376,6 +376,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
               page_table_mmap_read_file(pte_new, introduced);
               pte_new->status = FRAME;
               pte_new->frame = introduced;
+              frame_add_thread(introduced, thread1);
             }
           } else {
             page_table_mmap_read_file (pte, introduced);
