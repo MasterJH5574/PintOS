@@ -8,6 +8,7 @@
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
+static struct lock page_fault_mutex;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
@@ -59,6 +60,7 @@ exception_init (void)
      We need to disable interrupts for page faults because the
      fault address is stored in CR2 and needs to be preserved. */
   intr_register_int (14, 0, INTR_OFF, page_fault, "#PF Page-Fault Exception");
+  lock_init(&page_fault_mutex);
 }
 
 /* Prints exception statistics. */
@@ -140,6 +142,7 @@ page_fault (struct intr_frame *f)
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
+  lock_acquire(&page_fault_mutex);
 
   /* Count page faults. */
   page_fault_cnt++;
@@ -153,13 +156,15 @@ page_fault (struct intr_frame *f)
   /*Jiaxin Begin: handel the page_fault*/
   if (not_present && page_fault_handler(fault_addr, write, user ? f->esp : thread_current()->esp))
   {
+    lock_release(&page_fault_mutex);
     return;
   } else {
+    lock_release(&page_fault_mutex);
     sys_exit(-1);
   }
   /*Jiaxin End*/
 #endif
-
+  lock_release(&page_fault_mutex);
   /* Ruihang Begin: If the page fault is invoked by user program, terminate. */
   if (user)
     sys_exit(-1);
