@@ -63,7 +63,8 @@ bool page_table_map_file_page(struct file *file,
                               uint32_t *upage,
                               uint32_t read_bytes,
                               uint32_t zero_bytes,
-                              bool writable);
+                              bool writable,
+                              bool is_mmap);
 bool page_table_mmap_read_file(struct page_table_entry *pte, void *kpage);
 void page_table_mmap_write_back(struct page_table_entry *pte);
 void page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping);
