@@ -488,13 +488,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       #ifdef VM
       uint8_t *kpage;
       if (list_size(&file->inode->threads_open) == 0) {
-//        kpage = frame_get_frame(0, upage);
-        if(!page_table_map_file_page(file,ofs,upage,page_read_bytes,
-                              page_zero_bytes,
-                                     writable)){
-          return false;
+        if(!writable) {
+          if (!page_table_map_file_page(file, ofs, upage, page_read_bytes,
+                                        page_zero_bytes, writable)) {
+            return false;
+          }
+          skip=true;
+        } else{
+           kpage = frame_get_frame(0, upage);
+          /* Load this page. */
+          if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
+              #ifdef VM
+                frame_free_frame(kpage);
+              #else
+                palloc_free_page (kpage);
+              #endif
+              return false;
+          }
+          memset (kpage + page_read_bytes, 0, page_zero_bytes);
+  
         }
-        skip=true;
       } else{
         thread* open_thread=inode_get_open_thread(file->inode);
         struct page_table_entry* pte=pte_find(&open_thread->page_table,upage,false);
@@ -519,16 +532,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         if (kpage == NULL)
           return false;
 
-      /* Load this page. */
-//        if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-//            #ifdef VM
-//              frame_free_frame(kpage);
-//            #else
-//              palloc_free_page (kpage);
-//            #endif
-//            return false;
-//        }
-//        memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
         /* Add the page to the process's address space. */
         if (!install_page(upage, kpage, writable)) {
