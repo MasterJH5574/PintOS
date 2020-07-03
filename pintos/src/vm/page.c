@@ -59,7 +59,8 @@ page_table_entry_destroy(struct hash_elem *e, void *aux UNUSED) {
   struct page_table_entry *pte = hash_entry(e, struct page_table_entry, elem);
   if (pte->status == FRAME) {
     pagedir_clear_page(thread_current()->pagedir, pte->upage);
-    frame_free_frame(pte->frame);
+    // frame_free_frame(pte->frame);
+    frame_remove_thread(pte->frame, thread_current());
   } else if (pte->status == SWAP) {
     // Todo: maybe need something.
   } else if (pte->status == FILE) {
@@ -254,7 +255,8 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
       /* Write back to mmapped file. */
       page_table_mmap_write_back(md->pte);
       /* Release the page from page table. */
-      frame_free_frame(md->pte->frame);
+      // frame_free_frame(md->pte->frame);
+      frame_remove_thread(md->pte->frame, thread_current());
       pagedir_clear_page(pagedir, md->pte->upage);
     }
 

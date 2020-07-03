@@ -533,7 +533,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         /* Add the page to the process's address space. */
         if (!install_page(upage, kpage, writable)) {
           #ifdef VM
-            frame_free_frame(kpage);
+            //frame_free_frame(kpage);
+            frame_remove_thread(kpage, thread_current());
           #else
             palloc_free_page (kpage);
           #endif
@@ -569,7 +570,8 @@ setup_stack (void **esp, int argc, char *argv[])
         *esp = PHYS_BASE;
       else
       #ifdef VM
-        frame_free_frame(kpage);
+        // frame_free_frame(kpage);
+        frame_remove_thread(kpage, thread_current());
       #else
         palloc_free_page (kpage);
       #endif

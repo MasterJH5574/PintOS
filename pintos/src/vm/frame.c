@@ -141,6 +141,7 @@ bool frame_remove_thread(void *frame, thread *t) {
   list_remove(&thInfo->list_e);
   free(thInfo);
   lock_release(&mutex);
+  if (list_empty(&info->thread_list)) frame_free_frame(frame);
   return true;
 }
 list *frame_thread_list(void *frame) {
