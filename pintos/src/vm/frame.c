@@ -102,13 +102,14 @@ void *replace2get_page() {
       /* If the page was pinned, or it belongs to other thread, it cannot
        * be chosen.
        */
-      if (pte->pinned
-        || (list_cur->thread_hold != thread_current() && pte->status == FILE))
+      if (pte->pinned)
+        //|| (list_cur->thread_hold != thread_current() && pte->status == FILE))
         cur_next();
-      else
+      else {
+        //if (pte->status != FRAME) ASSERT(false);
         break;
+      }
     }
-  }
   frame_info *tmp = list_cur;
   void *rep_frame = list_cur->frame;
   pte = pte_find(&list_cur->thread_hold->page_table,
