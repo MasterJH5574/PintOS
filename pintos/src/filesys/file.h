@@ -1,6 +1,6 @@
 #ifndef FILESYS_FILE_H
 #define FILESYS_FILE_H
-
+#include "inode.h"
 #include "filesys/off_t.h"
 #include "kernel/list.h"
 struct file
