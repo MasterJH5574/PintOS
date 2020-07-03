@@ -248,7 +248,9 @@ list_push_back (struct list *list, struct list_elem *elem)
 struct list_elem *
 list_remove (struct list_elem *elem)
 {
-  ASSERT (is_interior (elem));
+  if (!is_interior (elem)){
+    return NULL;
+  }
   elem->prev->next = elem->next;
   elem->next->prev = elem->prev;
 //  elem->next=NULL;

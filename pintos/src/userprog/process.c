@@ -167,8 +167,7 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
-  if (pd != NULL)
-    {
+  if (pd != NULL){
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -179,7 +178,7 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-    }
+  }
   list_remove(&cur->exec_open_elem);
 }
 
@@ -489,16 +488,21 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       #ifdef VM
       uint8_t *kpage;
       if (list_size(&file->inode->threads_open) == 0) {
-        kpage = frame_get_frame(0, upage);
-        //todo:mmap the executable to memory
-  
+//        kpage = frame_get_frame(0, upage);
+        if(!page_table_map_file_page(file,ofs,upage,page_read_bytes,
+                              page_zero_bytes,
+                                     writable)){
+          return false;
+        }
+        skip=true;
       } else{
         thread* open_thread=inode_get_open_thread(file->inode);
         struct page_table_entry* pte=pte_find(&open_thread->page_table,upage,false);
         if (pte->status == FRAME) {
           kpage=pte->frame;
         } else if (pte->status == FILE) {
-          if(!page_table_map_file_page(file,ofs,upage,read_bytes,zero_bytes,
+          if(!page_table_map_file_page(file,ofs,upage,page_read_bytes,
+                                        page_zero_bytes,
                                     writable)){
             return false;
           }
@@ -516,15 +520,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           return false;
 
       /* Load this page. */
-        if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-            #ifdef VM
-              frame_free_frame(kpage);
-            #else
-              palloc_free_page (kpage);
-            #endif
-            return false;
-        }
-        memset (kpage + page_read_bytes, 0, page_zero_bytes);
+//        if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
+//            #ifdef VM
+//              frame_free_frame(kpage);
+//            #else
+//              palloc_free_page (kpage);
+//            #endif
+//            return false;
+//        }
+//        memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
         /* Add the page to the process's address space. */
         if (!install_page(upage, kpage, writable)) {
@@ -537,6 +541,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
       }
       /* Advance. */
+      ofs+=page_read_bytes;
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
