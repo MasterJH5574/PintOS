@@ -299,6 +299,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   void *introduced = NULL;
 
   bool success = false;
+  bool already_set_pagedir = false;
 //  lock_acquire(&page_table_lock);
 
   struct page_table_entry *pte = pte_find(page_table, upage, true);
@@ -372,14 +373,20 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         else {
           success = true;
           if (list_size (&pte->file->inode->threads_open) > 0) {
+            bool already_read = false;
             for (list_elem *elem = list_begin (&pte->file->inode->threads_open); elem != list_end (&pte->file->inode->threads_open); elem = list_next (elem)) {
               thread* thread1=list_entry(elem,thread,exec_open_elem);
               struct page_table_entry* pte_new=pte_find(&thread1->page_table,upage,false);
-              page_table_mmap_read_file(pte_new, introduced);
+              if (!already_read) {
+                page_table_mmap_read_file(pte_new, introduced);
+                already_read = true;
+              }
               pte_new->status = FRAME;
               pte_new->frame = introduced;
               frame_add_thread(introduced, thread1);
+              ASSERT(pagedir_set_page(thread1->pagedir, pte_new->upage, pte_new->frame, pte_new->writable))
             }
+            already_set_pagedir = true;
           } else {
             page_table_mmap_read_file (pte, introduced);
             pte->status = FRAME;
@@ -393,7 +400,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   /* Ruihang End */
 
 //  lock_release(&page_table_lock);
-  if (success) {
+  if (success && !already_set_pagedir) {
     bool pagedir_set_result = pagedir_set_page(cur->pagedir, pte->upage,
                                                pte->frame, pte->writable);
     ASSERT(pagedir_set_result)
