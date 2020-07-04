@@ -328,6 +328,7 @@ load (char *file_name, void (**eip) (void), void **esp)
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
+  lock_release(&filesys_lock);
   for (i = 0; i < ehdr.e_phnum; i++)
     {
       struct Elf32_Phdr phdr;
@@ -398,7 +399,6 @@ load (char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
   // file_close (file);
   /*Jiaxin Begin*/
-  lock_release (&filesys_lock);
   /*Jiaxin End*/
   return success;
 }
@@ -473,8 +473,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0)
   ASSERT (pg_ofs (upage) == 0)
   ASSERT (ofs % PGSIZE == 0)
-
+  lock_acquire(&filesys_lock);
   file_seek (file, ofs);
+  lock_release(&filesys_lock);
   while (read_bytes > 0 || zero_bytes > 0)
     {
       /* Calculate how to fill this page.
@@ -497,14 +498,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       }else{
         kpage = frame_get_frame(0, upage);
         /* Load this page. */
+        lock_acquire(&filesys_lock);
         if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
         #ifdef VM
-          frame_free_frame(kpage);
+          frame_remove_thread(kpage,thread_current());
         #else
           palloc_free_page (kpage);
         #endif
           return false;
         }
+        lock_release(&filesys_lock);
         memset (kpage + page_read_bytes, 0, page_zero_bytes);
       }
       

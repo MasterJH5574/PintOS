@@ -79,7 +79,7 @@ void *frame_get_frame (enum palloc_flags flag, void *user_page) {
 }
 
 void frame_free_frame(void* frame) {
-  lock_acquire(&mutex);
+//  lock_acquire(&mutex);
 
   struct frame_info tmp, *info;
   struct hash_elem *elem;
@@ -102,7 +102,7 @@ void frame_free_frame(void* frame) {
   
   free(info);
   palloc_free_page(frame);
-  lock_release(&mutex);
+//  lock_release(&mutex);
 }
 
 /* ZYHowell: support a frame shared by multi-threads*/
@@ -125,7 +125,7 @@ bool frame_add_thread(void *frame, thread *t) {
   th->value = t;
   hash_insert(&info->thread_hash, &th->hash_e);
   list_push_back(&info->thread_list, &th->list_e);
-  lock_release(&mutex);
+//  lock_release(&mutex);
   return true;
 }
 bool frame_remove_thread(void *frame, thread *t) {
@@ -148,8 +148,8 @@ bool frame_remove_thread(void *frame, thread *t) {
   hash_delete(&info->thread_hash, &thInfo->hash_e);
   list_remove(&thInfo->list_e);
   free(thInfo);
-  lock_release(&mutex);
   if (list_empty(&info->thread_list)) frame_free_frame(frame);
+  lock_release(&mutex);
   return true;
 }
 list *frame_thread_list(void *frame) {
