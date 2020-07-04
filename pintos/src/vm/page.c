@@ -285,7 +285,7 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
 * Given a virtual address(page) and a hashtable, allocate a frame for this page,
 * return whether successful or not
 */
-bool //__attribute__((optimize("-O0")))
+bool __attribute__((optimize("-O0")))
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
   if (!is_user_vaddr(fault_addr)) {
@@ -299,7 +299,6 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   void *introduced = NULL;
 
   bool success = false;
-  bool already_set_pagedir = false;
 //  lock_acquire(&page_table_lock);
 
   struct page_table_entry *pte = pte_find(page_table, upage, true);
@@ -367,32 +366,44 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         }
       } else if (pte->status == FILE) {
         /* Read the page from mmapped file. */
-        introduced = frame_get_frame(0, upage);
-        if (introduced == NULL)
-          success = false;
-        else {
-          success = true;
+        
           if (list_size (&pte->file->inode->threads_open) > 0) {
-            bool already_read = false;
+            bool in_frame;
             for (list_elem *elem = list_begin (&pte->file->inode->threads_open); elem != list_end (&pte->file->inode->threads_open); elem = list_next (elem)) {
               thread* thread1=list_entry(elem,thread,exec_open_elem);
               struct page_table_entry* pte_new=pte_find(&thread1->page_table,upage,false);
-              if (!already_read) {
-                page_table_mmap_read_file(pte_new, introduced);
-                already_read = true;
+              if (pte_new->status == FRAME) {
+                in_frame=true;
+                pte->status=FRAME;
+                pte->frame=pte_new->frame;
+                frame_add_thread(pte_new->frame,thread_current());
+                break;
               }
-              pte_new->status = FRAME;
-              pte_new->frame = introduced;
-              frame_add_thread(introduced, thread1);
-              ASSERT(pagedir_set_page(thread1->pagedir, pte_new->upage, pte_new->frame, pte_new->writable))
-            }
-            already_set_pagedir = true;
-          } else {
-            page_table_mmap_read_file (pte, introduced);
-            pte->status = FRAME;
-            pte->frame = introduced;
-          }
+              
+              }
+            if (!in_frame) {
+              if(!(introduced = frame_get_frame(0, upage))){
+                success=false;
+              } else {
+                    success=true;
+                page_table_mmap_read_file (pte, introduced);
+                pte->status = FRAME;
+                pte->frame = introduced;
+              }
+            } else {
+              success=true;
         }
+          } else {
+            if(!(introduced = frame_get_frame(0, upage))){
+              success=false;
+            } else {
+              success=true;
+              page_table_mmap_read_file (pte, introduced);
+              pte->status = FRAME;
+              pte->frame = introduced;
+            }
+          }
+        
       } else
         ASSERT(false)
     } // else success = false
@@ -400,7 +411,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
   /* Ruihang End */
 
 //  lock_release(&page_table_lock);
-  if (success && !already_set_pagedir) {
+  if (success) {
     bool pagedir_set_result = pagedir_set_page(cur->pagedir, pte->upage,
                                                pte->frame, pte->writable);
     ASSERT(pagedir_set_result)
