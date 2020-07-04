@@ -59,7 +59,8 @@ page_table_entry_destroy(struct hash_elem *e, void *aux UNUSED) {
   struct page_table_entry *pte = hash_entry(e, struct page_table_entry, elem);
   if (pte->status == FRAME) {
     pagedir_clear_page(thread_current()->pagedir, pte->upage);
-    frame_free_frame(pte->frame);
+    // frame_free_frame(pte->frame);
+    frame_remove_thread(pte->frame, thread_current());
   } else if (pte->status == SWAP) {
     // Todo: maybe need something.
   } else if (pte->status == FILE) {
@@ -152,7 +153,8 @@ page_table_map_file_page(struct file *file,
                               uint32_t *upage,
                               uint32_t read_bytes,
                               uint32_t zero_bytes,
-                              bool writable) {
+                              bool writable,
+                              bool is_mmap) {
   /* Assert that UPAGE is page-aligned. */
   ASSERT(pg_ofs(upage) == 0)
   struct thread *cur_thread = thread_current();
@@ -172,7 +174,8 @@ page_table_map_file_page(struct file *file,
   pte->zero_bytes = zero_bytes;
 
   struct mmap_descriptor *md = malloc(sizeof(struct mmap_descriptor));
-  md->mapid = cur_thread->md_num;
+  /* -1 means that this MD comes from code segment in ELF. */
+  md->mapid = is_mmap ? cur_thread->md_num : -1;
   md->pte = pte;
   list_push_back(&cur_thread->mmap_descriptors, &md->elem);
 
@@ -254,7 +257,8 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
       /* Write back to mmapped file. */
       page_table_mmap_write_back(md->pte);
       /* Release the page from page table. */
-      frame_free_frame(md->pte->frame);
+      // frame_free_frame(md->pte->frame);
+      frame_remove_thread(md->pte->frame, thread_current());
       pagedir_clear_page(pagedir, md->pte->upage);
     }
 
@@ -281,7 +285,7 @@ page_table_remove_mmap(struct list *mmap_descriptors, mapid_t mapping) {
 * Given a virtual address(page) and a hashtable, allocate a frame for this page,
 * return whether successful or not
 */
-bool //__attribute__((optimize("-O0")))
+bool __attribute__((optimize("-O0")))
 page_fault_handler(const void *fault_addr, bool write, void *esp)
 {
   if (!is_user_vaddr(fault_addr)) {
@@ -362,15 +366,44 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         }
       } else if (pte->status == FILE) {
         /* Read the page from mmapped file. */
-        introduced = frame_get_frame(0, upage);
-        if (introduced == NULL)
-          success = false;
-        else {
-          success = true;
-          page_table_mmap_read_file(pte, introduced);
-          pte->status = FRAME;
-          pte->frame = introduced;
+        
+          if (list_size (&pte->file->inode->threads_open) > 0) {
+            bool in_frame = false;
+            for (list_elem *elem = list_begin (&pte->file->inode->threads_open); elem != list_end (&pte->file->inode->threads_open); elem = list_next (elem)) {
+              thread* thread1=list_entry(elem,thread,exec_open_elem);
+              struct page_table_entry* pte_new=pte_find(&thread1->page_table,upage,false);
+              if (pte_new->status == FRAME) {
+                in_frame=true;
+                pte->status=FRAME;
+                pte->frame=pte_new->frame;
+                frame_add_thread(pte_new->frame,thread_current());
+                break;
+              }
+              
+              }
+            if (!in_frame) {
+              if(!(introduced = frame_get_frame(0, upage))){
+                success=false;
+              } else {
+                    success=true;
+                page_table_mmap_read_file (pte, introduced);
+                pte->status = FRAME;
+                pte->frame = introduced;
+              }
+            } else {
+              success=true;
         }
+          } else {
+            if(!(introduced = frame_get_frame(0, upage))){
+              success=false;
+            } else {
+              success=true;
+              page_table_mmap_read_file (pte, introduced);
+              pte->status = FRAME;
+              pte->frame = introduced;
+            }
+          }
+        
       } else
         ASSERT(false)
     } // else success = false

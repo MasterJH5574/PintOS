@@ -9,23 +9,12 @@
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
-#define PTR_NUM_BLOCK 127
+
 static char zeros[BLOCK_SECTOR_SIZE];
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-typedef struct inode_disk
-  {
-    block_sector_t start;               /* First data sector. */
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-    uint32_t unused[124];               /* Not used. */
-    bool isdir;                         /* Is dir file. */
-  } inode_disk;
-typedef struct inode_table_disk{
-  block_sector_t ptr[PTR_NUM_BLOCK];
-  block_sector_t next_block;
-}inode_table_disk;
+
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
 static inline size_t
@@ -34,16 +23,18 @@ bytes_to_sectors (off_t size)
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
 
-/* In-memory inode. */
-struct inode 
-  {
-    struct list_elem elem;              /* Element in inode list. */
-    block_sector_t sector;              /* Sector number of disk location. */
-    int open_cnt;                       /* Number of openers. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /* Inode content. */
-  };
+
+
+void inode_add_thread_open(struct inode* inode, thread* thread1){
+#ifdef VM
+  list_push_back(&inode->threads_open,&thread1->exec_open_elem);
+#endif
+}
+
+//thread* inode_get_open_thread(struct inode* inode){
+//  list_elem * elem=list_front(&inode->threads_open);
+//  return list_entry(elem,thread,exec_open_elem);
+//}
 
   static bool get_new_table_page(block_sector_t* sector,int initialized){
     bool success=free_map_allocate(1,sector);
@@ -220,6 +211,7 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+  list_init(&inode->threads_open);
   cache_read(inode->sector, &inode->data);
   return inode;
 }

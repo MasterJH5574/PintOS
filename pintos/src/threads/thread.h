@@ -130,6 +130,7 @@ struct thread
 
     mapid_t md_num;                     /* Number of mmap descriptors. */
     struct list mmap_descriptors;       /* List of mmap descriptors. */
+    list_elem exec_open_elem;
 #endif
     /* Ruihang End */
 
