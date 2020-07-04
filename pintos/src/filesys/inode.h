@@ -49,6 +49,6 @@ bool inode_isdir(struct inode*);
 void inode_set_dir(struct inode*);
 int inode_get_opencnt(struct inode* inode);
 void inode_add_thread_open(struct inode*, struct thread*);
-struct thread* inode_get_open_thread(struct inode* inode);
+//struct thread* inode_get_open_thread(struct inode* inode);
 
 #endif /* filesys/inode.h */

@@ -26,13 +26,15 @@ bytes_to_sectors (off_t size)
 
 
 void inode_add_thread_open(struct inode* inode, thread* thread1){
+#ifdef VM
   list_push_back(&inode->threads_open,&thread1->exec_open_elem);
+#endif
 }
 
-thread* inode_get_open_thread(struct inode* inode){
-  list_elem * elem=list_front(&inode->threads_open);
-  return list_entry(elem,thread,exec_open_elem);
-}
+//thread* inode_get_open_thread(struct inode* inode){
+//  list_elem * elem=list_front(&inode->threads_open);
+//  return list_entry(elem,thread,exec_open_elem);
+//}
 
   static bool get_new_table_page(block_sector_t* sector,int initialized){
     bool success=free_map_allocate(1,sector);

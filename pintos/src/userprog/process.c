@@ -518,6 +518,20 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         if (kpage == NULL)
           return false;
 
+        #ifndef VM
+        /* Load this page. */
+        if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+        {
+          #ifdef VM
+          frame_free_frame(kpage);
+          #else
+          palloc_free_page (kpage);
+          #endif
+          return false;
+        }
+        memset (kpage + page_read_bytes, 0, page_zero_bytes);
+        #endif
+
 
         /* Add the page to the process's address space. */
         if (!install_page(upage, kpage, writable)) {

@@ -229,6 +229,7 @@ void *replace2get_page() {
       e != list_end(&list_cur->thread_list);e = list_next(e)) {
         thread *thread_hold = list_entry(e, struct frame_thread, list_e)->value;
         pagedir_clear_page(thread_hold->pagedir, list_cur->page);
+//        free(list_entry(e, struct frame_thread, list_e));
       }
   //pagedir_clear_page(list_cur->thread_hold->pagedir, list_cur->page);
 
