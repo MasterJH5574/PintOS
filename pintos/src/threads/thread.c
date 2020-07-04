@@ -311,6 +311,7 @@ thread_exit (void)
   /*Jiaxin Begin*/
   struct list_elem *e;
   struct thread *cur_thread = thread_current();
+  list_remove(&cur_thread->exec_open_elem);
   if (cur_thread->cur_file != NULL)
   {
     file_close(cur_thread->cur_file);

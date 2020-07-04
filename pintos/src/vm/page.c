@@ -368,7 +368,7 @@ page_fault_handler(const void *fault_addr, bool write, void *esp)
         /* Read the page from mmapped file. */
         
           if (list_size (&pte->file->inode->threads_open) > 0) {
-            bool in_frame;
+            bool in_frame = false;
             for (list_elem *elem = list_begin (&pte->file->inode->threads_open); elem != list_end (&pte->file->inode->threads_open); elem = list_next (elem)) {
               thread* thread1=list_entry(elem,thread,exec_open_elem);
               struct page_table_entry* pte_new=pte_find(&thread1->page_table,upage,false);
