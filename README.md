@@ -2,7 +2,7 @@
 
 ## 分工
 
-Project1 - Thread：金弘义，庄永昊
+Project1 - Threads：金弘义，庄永昊
 
 Project2 - User Proggram：陆嘉馨，赖睿航
 
@@ -20,36 +20,38 @@ Bonus - ELF Sharing: 金弘义，庄永昊，赖睿航
 
 6/24-6/28 完成 proj3 和 proj4
 
-7/2-7/4 完成 bonus
+7/2-7/4 完成 bonus - ELF Sharing
 
 
 
 
 ## 架构设计
 
-### Project1
+### Project1 - Threads
 
 
-#### timer_sleep: 
+#### Function timer_sleep()
 
-给要休眠的进程记录一个wake_time，放入休眠队列，并调用sema_down阻塞当前进程。每次时钟中断都对休眠队列里的每个进程检查当前时间是否超过wake_time，如果超过则移出休眠队列并且调用sema_up使该进程可以继续被执行。
+给要休眠的进程记录一个 wake time ，放入休眠队列，并调用 `sema_down()` 阻塞当前进程。每次时钟中断都对休眠队列里的每个进程检查当前时间是否超过 wake time，如果超过则移出休眠队列并且调用 `sema_up()` 使该进程可以继续被执行。
 
-#### Priority：
+#### Priority
 
-维护多个优先级队列（包括ready_list,semaphore的等待队列，和conditional variable的等待队列）。ready_list中下一个要运行的线程和等待队列中下一个要唤醒的进程都是优先级最高的线程。 
+维护多个优先级队列（包括 `ready_list` , semaphore 的等待队列，和 conditional variable 的等待队列）。`ready_list` 中下一个要运行的线程和等待队列中下一个要唤醒的进程都是优先级最高的线程。 
 
-priority donation：当高优先级线程A由于一个锁被阻塞时，如果锁被低优先级线程B占用，它会把B的优先级提升到A的优先级。优先级会一直随着等待的链向前传递。实现方法：给线程记录一个正在等待的线程lock_waiting_for，这样就形成了一个链，然后当调用lock_acquire时沿着这个链向前更新优先级。另外记录每个线程获得的锁 acquired_locks,当调用lock_release时会根据这些锁的等待队列计算新的优先级
+Priority donation：当高优先级线程 A 由于一个锁被阻塞时，如果锁被低优先级线程 B 占用，它会把 B 的优先级提升到 A 的优先级。优先级会一直随着等待的链向前传递。实现方法：给线程记录一个正在等待的线程 `lock_waiting_for` ，这样就形成了一个链，然后当调用 `lock_acquire()` 时沿着这个链向前更新优先级。另外记录每个线程获得的锁 `acquired_locks` ,当调用 `lock_release()` 时会根据这些锁的等待队列计算新的优先级
 
-由于priority donation的影响，可能随时会改变线程的优先级，如果每次改变都维护优先级队列可能开销会很大，所以在每次选取优先级最高的线程时都要进行sort。
+由于 priority donation 的影响，可能随时会改变线程的优先级，如果每次改变都维护优先级队列可能开销会很大，所以在每次选取优先级最高的线程时都要进行 sort。
 
-//todo: bsd scheduler
+#### BSD Scheduler
+
+
 
 
 ### Project2
 
 #### Argument Passing
 
-具体实现：用给定的`strtok_r`函数对读入命令行进行分割，并按照pintos文档 Section 4.5.1 [Program Startup Details], page 42 中给出的栈的设置方式，在setup_stack成功后，将对应的信息放入栈的对应位置中。
+具体实现：用给定的 `strtok_r` 函数对读入命令行进行分割，并按照 PintOS 文档 Section 4.5.1 [Program Startup Details], page 42 中给出的栈的设置方式，在 `setup_stack()` 成功后，将对应的信息放入栈的对应位置中。
 
 #### System Calls
 
@@ -108,9 +110,9 @@ struct page_table_entry {
 
 #### Swap
 
-使用系统提供的`block`接口，并用`block`的序号作为索引进行操作。
+使用系统提供的 `block` 接口，并用 `block` 的序号作为索引进行操作。
 
-swap并通过链表维护swap在load时空出的块，使其在下一次store时可以继续使用。
+swap 并通过链表维护 swap 在 load 时空出的块，使其在下一次 store 时可以继续使用。
 
 #### Eviction
 
@@ -138,13 +140,15 @@ swap并通过链表维护swap在load时空出的块，使其在下一次store时
 
 #### Buffer Cache
 
-使用hash+list实现的lru，每个block代表一个扇区。
+使用 hash + list 实现的 LRU，每个 block 代表一个扇区。
 
 #### Extensible Files
 
-改变inode结构：由一个起始页和多个目录页构成，不要求连续，用扇区地址来链接。起始页记录metadata，目录页记录文件页的扇区地址。扩充文件就是不断申请页，在目录页里添加扇区地址（如果大小不够再申请目录页）
+改变 inode 结构：由一个起始页和多个目录页构成，不要求连续，用扇区地址来链接。起始页记录 metadata ，目录页记录文件页的扇区地址。扩充文件就是不断申请页，在目录页里添加扇区地址（如果大小不够再申请目录页）
 
-//todo: subdirectory
+#### Subdirectory
+
+
 
 ### Bonus
 
@@ -156,12 +160,12 @@ swap并通过链表维护swap在load时空出的块，使其在下一次store时
 
 ------
 
-load_segment 时如果遇到只读的 segment，则将 user space 中对应的若干个页映射到这个 segment。
+`load_segment()` 时如果遇到只读的 segment，则将 user space 中对应的若干个页映射到这个 segment。
 
-对 inode 记录打开线程的列表。page fault handler中如果fault_addr对应的supplemental page table entry显示这一页在文件里，就遍历inode的打开线程。如果某一线程中fault_addr在内存某个frame，就在pagedir和supplemental page table把fault_addr指向这个frame。如果没有找到内存中的fault_addr，就从文件里load，并更新pagedir和supplemental page table。
+对 inode 记录打开线程的列表。page fault handler 中如果 `fault_addr` 对应的 spte 显示这一页在文件里，就遍历 inode 的打开线程。如果某一线程中 `fault_addr` 在内存某个frame，就在 pagedir 和 spt 把 `fault_addr` 指向这个 frame。如果没有找到内存中的 `fault_addr`，就从文件里读入，并更新 pagedir 和 supplemental page table。
 
 //todo: frame table的改变
 
 #### Run File System Test Cases with Virtual Memory
 
-在开启vm功能的条件下成功运行proj4的文件系统。
+在开启 VM 功能的条件下成功运行 proj4 的文件系统。
