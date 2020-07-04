@@ -165,7 +165,6 @@ pintos_init (void)
         printf("unknown command\n");
       }
     }
-    // TODO: no command line passed to kernel. Run interactively 
   }
 
   /* Finish up. */

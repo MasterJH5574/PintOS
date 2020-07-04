@@ -1,173 +1,195 @@
-# System2020
+# PintOS Report
 
-Project resources for System(II) 2020 Spring
+## 分工
 
-Stay tuned
+Project1 - Threads：金弘义，庄永昊
 
-## Syncing with this repo
+Project2 - User Proggram：陆嘉馨，赖睿航
 
-on top of your own repository, run
+Project3 - Virtual Memory：金弘义，庄永昊，陆嘉馨，赖睿航
 
-    git pull https://github.com/LiJiasen-00921/PintOS-Assignment
+Project4 - File System：金弘义，庄永昊，陆嘉馨，赖睿航
 
-## Assignments
+Bonus - ELF Sharing: 金弘义，庄永昊，赖睿航
 
-### PintOS
 
-A small and simple operating system that runs on x86 machines and simulators.
 
-### [Prerequisites](https://www.cs.jhu.edu/~huang/cs318/fall17/project/setup.html)
+## 时间
 
-- GCC with 80x86 cross-compiler
-- Perl
-- GNU make
-- GDB
-- [QEMU](https://www.qemu.org/index.html)(Recommended): fast x86 simulation with binary translation, but only supports real-time mode
-- Bochs: slower simulation but supports real-time and reproducible mode
+6/7-6/11 完成 proj1 和 proj2
 
-To install Bochs, make sure the following library is installed:
+6/24-6/28 完成 proj3 和 proj4
 
-- libncurses5-dev
-- libx11-dev
-- libxrandr-dev
+7/2-7/4 完成 bonus - ELF Sharing
 
-Then under src/misc, run
 
-    sudo ./bochs-2.6.2-build.sh /usr/
 
-### Usage
 
-First build the pintos utility tools. Under src/utils/,
+## 架构设计
 
-    make
-    export PATH=$PATH:`pwd`
+### Project1 - Threads
 
-make sure it is in your PATH environment variable before continuing
 
-The following tools are available:
+#### Function timer_sleep()
 
-- pintos: utility for running Pintos in a simulator
-- pintos-gdb: launch gdb to debug the kernel
-- backtrace: converting raw addresses into symbolic backtraces
+给要休眠的进程记录一个 wake time ，放入休眠队列，并调用 `sema_down()` 阻塞当前进程。每次时钟中断都对休眠队列里的每个进程检查当前时间是否超过 wake time，如果超过则移出休眠队列并且调用 `sema_up()` 使该进程可以继续被执行。
 
-In each project directory (threads, userprog, vm, filesys),
+#### Priority
 
-to build the project, run
+维护多个优先级队列（包括 `ready_list` , semaphore 的等待队列，和 conditional variable 的等待队列）。`ready_list` 中下一个要运行的线程和等待队列中下一个要唤醒的进程都是优先级最高的线程。 
 
-    make
+Priority donation：当高优先级线程 A 由于一个锁被阻塞时，如果锁被低优先级线程 B 占用，它会把 B 的优先级提升到 A 的优先级。优先级会一直随着等待的链向前传递。实现方法：给线程记录一个正在等待的线程 `lock_waiting_for` ，这样就形成了一个链，然后当调用 `lock_acquire()` 时沿着这个链向前更新优先级。另外记录每个线程获得的锁 `acquired_locks` ,当调用 `lock_release()` 时会根据这些锁的等待队列计算新的优先级
 
-the following files can be found in folder 'build/'
+由于 priority donation 的影响，可能随时会改变线程的优先级，如果每次改变都维护优先级队列可能开销会很大，所以在每次选取优先级最高的线程时都要进行 sort。
 
-- kernel.o: compiled kernel, used for debugging
-- kernel.bin: compiled kernel, stripped
-- kernel.asm: decompilation of kernel
-- kernel.img: image of boot partition
-- loader.bin: compiled bootloader
-- loader.asm: decompilation of bootloader
-- pintos.sh: wrapper script for running pintos
+#### BSD Scheduler
 
-to run pintos in simulation (here using Bochs and no VGA), run
+使用 `fixReal` 类模拟浮点计算，通过一定的给定规则计算每个线程的优先级，再选出优先级最高的线程来执行，对同一优先级使用 Round-Robin 算法。为了简化实现，使用了单个队列，每次取出队列中优先级最高的线程作为实际执行的线程。
 
-    pintos -v --bochs
 
-to run all the tests and see your grade, run
+### Project2
 
-    make check
+#### Argument Passing
 
-to run a single test, make the '.result' file from 'build/', e.g.
+具体实现：用给定的 `strtok_r` 函数对读入命令行进行分割，并按照 PintOS 文档 Section 4.5.1 [Program Startup Details], page 42 中给出的栈的设置方式，在 `setup_stack()` 成功后，将对应的信息放入栈的对应位置中。
 
-    make tests/threads/alarm-multiple.result
+#### System Calls
 
-or use the wrapper script provided
+* 由于用户传入的 syscall 参数的地址是在 user space，所以要取出 syscall number 和用户传入的 syscall 参数，可能需要 dereference `esp`, `esp + 4`, `esp + 8` 和 `esp + 12`。为了避免 kernel thread 触发 page fault，需要检查 syscall 的参数所对应的 user address 检查合法性，如果不合法则直接调用 `exit(-1)` 结束线程。
+* 完成 proj2 的过程中尚未考虑要固定 syscall 参数所在页，这一操作在 proj3 的实现中得到完成。
+* 为保证线程安全，需要用 `filesys_lock` 来保证任意时刻在进行文件系统操作的线程最多只有一个。
 
-    ./pintos.sh run alarm-multiple
+具体实现：
+* `sys_halt` 直接调用 `shutdown_power_off()`。
+* `sys_exit` 将参数 `status` 存入当前线程的 `exit_code` 成员，再调用 `thread_exit()`。在 `sys_exit()` ， `thread_exit()` 和 `process_exit()` 里实现了对线程所占用的一些资源的释放。
+* `sys_exec` 直接调用 `process_execute()`。
+* `sys_wait`
+* `sys_create` 和 `sys_remove` 直接调用 `filesys_create()`  和 `filesys_remove()`。
+* `sys_open` 先调用 `filesys_open()`，再为当前进程新开一个 `file_descriptor` 表示该线程打开了这个文件。
+* `sys_filesize` 在检查 `fd` 是否合法后直接调用 `file_length()`。
+* `sys_read` 检查 `fd`，若 `fd` 为 0 则反复调用 `input_getc()` 读取输入，`fd` 为其它合法情况则调用 `file_read`。
+* `sys_write` 与 `sys_read` 类似，只是若 `fd` 为 1 则调用 `putbuf()`。
+* `sys_seek` 和 `sys_tell` 在检查 `fd` 合法后分别调用 `file_seek()` 和 `file_tell()`。
+* `sys_close` 在检查 `fd` 后调用 `file_close()`，再将对应的 `file_descriptor`  从当前线程的相应列表中移除。
 
-to debug a single test,
+### Project3
 
-    make tests/threads/alarm-multiple.result PINTOSOPTS='--gdb' VERBOSE=1
+#### Frame
 
-or use the wrapper script provided
+通过 `frame_info`维护了frame相关的内容
 
-    ./pintos.sh debug alarm-multiple
+```C
+struct frame_info{
+    list thread_list;					/* the list of threads holding the frame */
+    hash thread_hash;					/* the hash table to make access faster */
+    bool access;						/* for clock algorightm */
+    void* page;							/* the upage */
+    void* frame;						/* the kpage */
+    struct hash_elem elem;
+    struct list_elem list_elem;
+};
+```
 
-in a new terminal still under 'build/', run
+其主要维护了虚拟地址到物理地址的映射，以及占用相应页的线程（对于 sharing 的情况，记录了所有占用的线程，因此使用了一个 list 和一个 hash 进行维护）。在进行相关操作时，会通过上锁保证线程安全。
 
-    pintos-gdb kernel.o
+#### Supplemental Page Table
 
-and in the gdb prompt, run
+核心为 `struct page_table_entry` ，表示 supplemental page table entry。
 
-    debugpintos
+```c
+struct page_table_entry {
+  void *upage;                            /* As the key of page table. */
+  enum page_status status;                /* Show where the page is. */
+  bool writable;                          /* Whether this page is writable. */
+  bool pinned;                            /* Whether the page is pinned. */
 
-the gdb is now connected to the kernel
+  void *frame;                            /* If status == FRAME. */
 
-### Projects
+  block_sector_t swap_index;              /* If status == SWAP. */
 
-#### Threads
+  struct file *file;                      /* If the page comes from a file. */
+  off_t file_offset;
+  uint32_t read_bytes;
+  uint32_t zero_bytes;
 
-See [JHU CS 318 Project 1](https://www.cs.jhu.edu/~huang/cs318/fall17/project/project1.html) for details.
+  struct hash_elem elem;
+};
+```
 
-- alarm clock
-- priority scheduling
-- advanced scheduler
+每个线程维护一个哈希表作为 supplemental page table，从一个 upage 映射到一个 spte。
 
-#### User Programs
+正常情况下，用户态线程进行内存访问会直接走 pagedir，不会用到 spt。但是当一个进程触发 page fault 时，需要知道对应的页是在文件中还是在 swap 中，因此需要 *supplemental* pte 记录这些信息。
 
-See [JHU CS 318 Project 2](https://www.cs.jhu.edu/~huang/cs318/fall17/project/project2.html) for details.
+同样，在进行 mmap/munmap 调用和将一个 frame 替换到 swap/file 时，也需要用到 spt。
 
-#### Virtual Memory
+#### Swap
 
-See [JHU CS 318 Project 3](https://www.cs.jhu.edu/~huang/cs318/fall17/project/project3.html) for details.
+使用系统提供的`block`接口，并用`block`的序号作为索引进行swap操作。
 
-#### File Systems
+swap通过链表维护swap在load时空出的块，使其在下一次store时可以继续使用。
 
-(bonus)
+#### Eviction
 
-See [JHU CS 318 Project 4](https://www.cs.jhu.edu/~huang/cs318/fall17/project/project4.html) for details.
+替换算法为时钟算法，在`frame.c`中使用了`list_cur`来维护时钟的指向，同时使用 `struct frame` 的 `access 成员维护时钟算法中的最近是否访问。
 
-#### Additional features
+#### Page Fault Handler
 
-(bonus)
+1. 区分触发 page fault 的 `fault_addr` 是否需要栈增长。
+2. 如果需要栈增长则让栈增长一个页；否则查看对应的 spte，去到 swap/file 中将数据读入。
 
-#### Documents
+#### VM System Calls
 
-You need to write documents on your project.
+##### Pin
 
-Either documents on each part or documents on the project as a whole are acceptable.
+为了避免 syscall 参数所在的页在 syscall 运行过程中被替换出内存，进而导致运行 syscall 的 kernel 触发 page fault 造成麻烦，需要在执行 syscall 之前将参数所在的页读进内存（如果本来不在的话）再固定住。固定住一个页之后，这个页在取消固定之前不会被替换到 swap/file 中。
 
-Your documents must include:
+当 syscall 执行完毕时，取消固定。
 
-- name of contributors and their contributions
-- length of time spent on each labs
+##### MMAP/MUNMAP
 
-Your documents may include:
+* `sys_mmap` 不直接把文件读入内存，而是只建好想应的 spte，等到用户尝试访问而触发 page fault 时再将文件读入。
+* `sys_munmap` 移除该线程所对应的 mmap 信息和 spte 即可。移除时如果对应的页表现为 dirty，则需要写回文件。同样，在一个线程退出时也需要将 dirty 的 mmap 页写回文件。
 
-- design for each part of the project.
-- advantage & disadvantages of your design.
-- difficulties & solutions
+### Project4
 
-### Submission
+#### Buffer Cache
 
-For each project group:
+使用 hash + list 实现的 LRU，每个 block 代表一个扇区。
 
-- Fork or pull this repository to your private github repository.
-- Add LiJiasen-00921 as collabrator.
-- Set your repository public after the deadline for 3 months.
-- Fill up the group infromation in this [form.](https://docs.google.com/spreadsheets/d/1fXb2yQkMQXij3VqJXAAy5lvxMgXSxpLdNUlsnX-DO7A/edit?usp=sharing)
-- make sure your repo has a pintos source folder named 'src', and put your documents in top-level directory or 'docs' folder.
+#### Extensible Files
 
-## References
+改变 inode 结构：由一个起始页和多个目录页构成，不要求连续，用扇区地址来链接。起始页记录 metadata ，目录页记录文件页的扇区地址。扩充文件就是不断申请页，在目录页里添加扇区地址（如果大小不够再申请目录页）
 
-[JHU CS 318 Pintos Project](https://cs.jhu.edu/~huang/cs318/fall17/project/guide.html)
+#### Subdirectory
 
-[Stanford CS 140 Pintos Project](https://web.stanford.edu/class/cs140/projects/pintos/pintos.html)
+使用文件结构作为目录，记录相关信息。同时，通过条目录记录文件的位置和文件名。删除时检查打开的线程数，再将对应的条目录设为空。
 
-[Project Document](https://cs.jhu.edu/~huang/cs318/fall17/project/pintos.html)
+#### File System System Calls
 
-#### ACKNOWLEDGEMENTS (NO NEED TO SEE IF YOU JUST WANT TO FINISH THE PROJECT)
+* 修改 `sys_open` ， `sys_close` 使其分别能打开、关闭一个目录。
+* 修改其它文件相关的 system calls 使其能拒绝对目录进行操作。
+* `sys_chdir` 找到并打开目标目录，将当前线程所记录的当前目录改为目标目录，最后关闭原目录。
+* `sys_mkdir` 在 parse 路径后检查被创建的目录是否为根目录，不是根目录的话则调用 `subdir_create()`。
+* `sys_readdir` 检查对应的 file descriptor 是否表示目录，再直接调用 `dir_readdir()`。
+* `sys_isdir` 直接检查对应的 file descriptor 是否表示目录。
+* `sys_inumber` 调用 `inode_get_inumber()` 获取一个 inode 对应的 inumber。
 
-[Original ](https://github.com/jhu-cs318/pintos)
-[repository](https://github.com/CreeperLin/pintos/tree/ac4b6d0d1cadea10ba94dbea51b37f4ac012ff2f)
+### Bonus
 
-## Notes
+#### Sharing
 
-- Get github student pack to create unlimited private repositories.
+在 VM 中实现了 sharing：
+
+> When multiple processes are created that use the same executable file, share read-only pages among those processes instead of creating separate copies of read-only segments for each process.
+
+------
+
+`load_segment()` 时如果遇到只读的 segment，则将 user space 中对应的若干个页映射到这个 segment。
+
+对 inode 记录打开线程的列表。page fault handler 中如果 `fault_addr` 对应的 spte 显示这一页在文件里，就遍历 inode 的打开线程。如果某一线程中 `fault_addr` 在内存某个frame，就在 pagedir 和 spt 把 `fault_addr` 指向这个 frame。如果没有找到内存中的 `fault_addr`，就从文件里读入，并更新 pagedir 和 supplemental page table。
+
+frame table改为了记录所有占用该页的线程。在共享发生时，会进行`frame_add_thread`，使得对应的frame的`thread_list`和`thread_hash`增加相应元素。此时，使用了`frame_thread`来包装每个`thread`，使其能够被放入`list`和`hash`中。在进行时钟算法的页替换时，会将每个占有该页的`thread`的page table都进行相应调整。同时，原本的`frame_free_frame`的调用改为了`frame_remove_thread`，只有在页的占用线程数为0时，才会调用`frame_free_frame`进行释放。
+
+#### Run File System Test Cases with Virtual Memory
+
+在开启 VM 功能的条件下成功运行 proj4 的文件系统。
