@@ -75,9 +75,9 @@ priority donation：当高优先级线程A由于一个锁被阻塞时，如果�
 
 ##### swap
 
-使用系统提供的`block`接口，并用`block`的序号作为索引进行操作。
+使用系统提供的`block`接口，并用`block`的序号作为索引进行swap操作。
 
-swap并通过链表维护swap在load时空出的块，使其在下一次store时可以继续使用。
+swap通过链表维护swap在load时空出的块，使其在下一次store时可以继续使用。
 
 ### Project4
 
