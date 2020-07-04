@@ -61,12 +61,6 @@ page_table_entry_destroy(struct hash_elem *e, void *aux UNUSED) {
     pagedir_clear_page(thread_current()->pagedir, pte->upage);
     // frame_free_frame(pte->frame);
     frame_remove_thread(pte->frame, thread_current());
-  } else if (pte->status == SWAP) {
-    // Todo: maybe need something.
-  } else if (pte->status == FILE) {
-    // Todo: maybe need something, maybe not.
-  } else {
-    ASSERT(false)
   }
   free(pte);
 }

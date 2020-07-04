@@ -47,11 +47,11 @@ priority donation：当高优先级线程A由于一个锁被阻塞时，如果�
 
 ### Project2
 
-#### 1. Argument Passing
+#### Argument Passing
 
 具体实现：用给定的`strtok_r`函数对读入命令行进行分割，并按照pintos文档 Section 4.5.1 [Program Startup Details], page 42 中给出的栈的设置方式，在setup_stack成功后，将对应的信息放入栈的对应位置中。
 
-#### 2. System Calls
+#### System Calls
 
 * 由于用户传入的 syscall 参数的地址是在 user space，所以要取出 syscall number 和用户传入的 syscall 参数，可能需要 dereference `esp`, `esp + 4`, `esp + 8` 和 `esp + 12`。为了避免 kernel thread 触发 page fault，需要检查 syscall 的参数所对应的 user address 检查合法性，如果不合法则直接调用 `exit(-1)` 结束线程。
 * 完成 proj2 的过程中尚未考虑要固定 syscall 参数所在页，这一操作在 proj3 的实现中得到完成。
@@ -70,30 +70,85 @@ priority donation：当高优先级线程A由于一个锁被阻塞时，如果�
 * `sys_seek` 和 `sys_tell` 在检查 `fd` 合法后分别调用 `file_seek()` 和 `file_tell()`。
 * `sys_close` 在检查 `fd` 后调用 `file_close()`，再将对应的 `file_descriptor`  从当前线程的相应列表中移除。
 
-
 ### Project3
 
-##### swap
+#### Frame
+
+
+
+#### Supplemental Page Table
+
+核心为 `struct page_table_entry` ，表示 supplemental page table entry。
+
+```c
+struct page_table_entry {
+  void *upage;                            /* As the key of page table. */
+  enum page_status status;                /* Show where the page is. */
+  bool writable;                          /* Whether this page is writable. */
+  bool pinned;                            /* Whether the page is pinned. */
+
+  void *frame;                            /* If status == FRAME. */
+
+  block_sector_t swap_index;              /* If status == SWAP. */
+
+  struct file *file;                      /* If the page comes from a file. */
+  off_t file_offset;
+  uint32_t read_bytes;
+  uint32_t zero_bytes;
+
+  struct hash_elem elem;
+};
+```
+
+每个线程维护一个哈希表作为 supplemental page table，从一个 upage 映射到一个 spte。
+
+正常情况下，用户态线程进行内存访问会直接走 pagedir，不会用到 spt。但是当一个进程触发 page fault 时，需要知道对应的页是在文件中还是在 swap 中，因此需要 *supplemental* pte 记录这些信息。
+
+同样，在进行 mmap/munmap 调用和将一个 frame 替换到 swap/file 时，也需要用到 spt。
+
+#### Swap
 
 使用系统提供的`block`接口，并用`block`的序号作为索引进行操作。
 
 swap并通过链表维护swap在load时空出的块，使其在下一次store时可以继续使用。
 
+#### Eviction
+
+
+
+#### Page Fault Handler
+
+1. 区分触发 page fault 的 `fault_addr` 是否需要栈增长。
+2. 如果需要栈增长则让栈增长一个页；否则查看对应的 spte，去到 swap/file 中将数据读入。
+
+#### VM System Calls
+
+##### Pin
+
+为了避免 syscall 参数所在的页在 syscall 运行过程中被替换出内存，进而导致运行 syscall 的 kernel 触发 page fault 造成麻烦，需要在执行 syscall 之前将参数所在的页读进内存（如果本来不在的话）再固定住。固定住一个页之后，这个页在取消固定之前不会被替换到 swap/file 中。
+
+当 syscall 执行完毕时，取消固定。
+
+##### MMAP/MUNMAP
+
+* `sys_mmap` 不直接把文件读入内存，而是只建好想应的 spte，等到用户尝试访问而触发 page fault 时再将文件读入。
+* `sys_munmap` 移除该线程所对应的 mmap 信息和 spte 即可。移除时如果对应的页表现为 dirty，则需要写回文件。同样，在一个线程退出时也需要将 dirty 的 mmap 页写回文件。
+
 ### Project4
 
-#### buffer cache:
+#### Buffer Cache
 
 使用hash+list实现的lru，每个block代表一个扇区。
 
-#### extensible files：
+#### Extensible Files
 
 改变inode结构：由一个起始页和多个目录页构成，不要求连续，用扇区地址来链接。起始页记录metadata，目录页记录文件页的扇区地址。扩充文件就是不断申请页，在目录页里添加扇区地址（如果大小不够再申请目录页）
 
 //todo: subdirectory
 
+### Bonus
 
-
-### Bonus: ELF Sharing
+#### Sharing
 
 在 VM 中实现了 sharing：
 
@@ -101,14 +156,12 @@ swap并通过链表维护swap在load时空出的块，使其在下一次store时
 
 ------
 
-load_segment 时如果遇到只读的页，将这个页 mmap 到指定的 upage 上。
+load_segment 时如果遇到只读的 segment，则将 user space 中对应的若干个页映射到这个 segment。
 
 对 inode 记录打开线程的列表。page fault handler中如果fault_addr对应的supplemental page table entry显示这一页在文件里，就遍历inode的打开线程。如果某一线程中fault_addr在内存某个frame，就在pagedir和supplemental page table把fault_addr指向这个frame。如果没有找到内存中的fault_addr，就从文件里load，并更新pagedir和supplemental page table。
 
 //todo: frame table的改变
 
-### 
-
-
+#### Run File System Test Cases with Virtual Memory
 
 在开启vm功能的条件下成功运行proj4的文件系统。

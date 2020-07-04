@@ -28,13 +28,10 @@ struct page_table_entry {
 
   block_sector_t swap_index;              /* If status == SWAP. */
 
-  struct file *file;                      /* If status == FILE. */
+  struct file *file;                      /* If the page comes from a file. */
   off_t file_offset;
   uint32_t read_bytes;
   uint32_t zero_bytes;
-
-
-  // Todo: maybe this structure will be modified again and again.
 
   struct hash_elem elem;
 };
