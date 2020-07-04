@@ -501,6 +501,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
               pte_find(&open_thread->page_table, upage, false);
           if (pte->status == FRAME) {
             kpage = pte->frame;
+            frame_add_thread(pte->frame, thread_current());
           } else if (pte->status == FILE) {
             if (!page_table_map_file_page(file, ofs, upage, page_read_bytes,
                                           page_zero_bytes, writable, false)) {

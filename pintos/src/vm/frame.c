@@ -220,7 +220,7 @@ void *replace2get_page() {
   }
   else {
     block_sector_t index = swap_store(rep_frame);
-    if (index == ((block_sector_t) -1)) return NULL;//something wrong
+    if (index == ((block_sector_t) -1)) return NULL;
     pte->swap_index = index;
     pte->status = SWAP;
     pte->frame = NULL;
