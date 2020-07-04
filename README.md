@@ -150,6 +150,16 @@ swap 并通过链表维护 swap 在 load 时空出的块，使其在下一次 st
 
 
 
+#### File System System Calls
+
+* 修改 `sys_open` ， `sys_close` 使其分别能打开、关闭一个目录。
+* 修改其它文件相关的 system calls 使其能拒绝对目录进行操作。
+* `sys_chdir` 找到并打开目标目录，将当前线程所记录的当前目录改为目标目录，最后关闭原目录。
+* `sys_mkdir` 在 parse 路径后检查被创建的目录是否为根目录，不是根目录的话则调用 `subdir_create()`。
+* `sys_readdir` 检查对应的 file descriptor 是否表示目录，再直接调用 `dir_readdir()`。
+* `sys_isdir` 直接检查对应的 file descriptor 是否表示目录。
+* `sys_inumber` 调用 `inode_get_inumber()` 获取一个 inode 对应的 inumber。
+
 ### Bonus
 
 #### Sharing
