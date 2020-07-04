@@ -125,7 +125,7 @@ bool frame_add_thread(void *frame, thread *t) {
   th->value = t;
   hash_insert(&info->thread_hash, &th->hash_e);
   list_push_back(&info->thread_list, &th->list_e);
-//  lock_release(&mutex);
+  lock_release(&mutex);
   return true;
 }
 bool frame_remove_thread(void *frame, thread *t) {
