@@ -210,9 +210,13 @@ void *replace2get_page() {
 
 //  ASSERT(pte->status == FRAME)
   if (pte->file != NULL) {
-    page_table_mmap_write_back(pte);
-    pte->status = FILE;
-    pte->frame = NULL;
+    for(list_elem* all_elem=list_begin(&list_cur->thread_list);all_elem!=list_end(&list_cur->thread_list);all_elem=list_next(all_elem)) {
+      frame_thread *all_ft = list_entry(all_elem, struct frame_thread, list_e);
+      struct page_table_entry *all_pte = pte_find(&all_ft->value->page_table, list_cur->page, false);
+      page_table_mmap_write_back (all_pte);
+      all_pte->status = FILE;
+      all_pte->frame = NULL;
+    }
   }
   else {
     block_sector_t index = swap_store(rep_frame);
