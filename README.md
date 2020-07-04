@@ -188,7 +188,7 @@ swap通过链表维护swap在load时空出的块，使其在下一次store时可
 
 对 inode 记录打开线程的列表。page fault handler 中如果 `fault_addr` 对应的 spte 显示这一页在文件里，就遍历 inode 的打开线程。如果某一线程中 `fault_addr` 在内存某个frame，就在 pagedir 和 spt 把 `fault_addr` 指向这个 frame。如果没有找到内存中的 `fault_addr`，就从文件里读入，并更新 pagedir 和 supplemental page table。
 
-//todo: frame table的改变
+frame table改为了记录所有占用该页的线程。在共享发生时，会进行`frame_add_thread`，使得对应的frame的`thread_list`和`thread_hash`增加相应元素。此时，使用了`frame_thread`来包装每个`thread`，使其能够被放入`list`和`hash`中。在进行时钟算法的页替换时，会将每个占有该页的`thread`的page table都进行相应调整。同时，原本的`frame_free_frame`的调用改为了`frame_remove_thread`，只有在页的占用线程数为0时，才会调用`frame_free_frame`进行释放。
 
 #### Run File System Test Cases with Virtual Memory
 
