@@ -488,30 +488,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       #ifdef VM
       uint8_t *kpage;
       if(!writable) {
-        if (list_size(&file->inode->threads_open) == 0) {
 
           if (!page_table_map_file_page(file, ofs, upage, page_read_bytes,
                                         page_zero_bytes, writable, false)) {
             return false;
           }
           skip = true;
-        } else {
-          thread *open_thread = inode_get_open_thread(file->inode);
-          struct page_table_entry *pte =
-              pte_find(&open_thread->page_table, upage, false);
-          if (pte->status == FRAME) {
-            kpage = pte->frame;
-            frame_add_thread(pte->frame, thread_current());
-          } else if (pte->status == FILE) {
-            if (!page_table_map_file_page(file, ofs, upage, page_read_bytes,
-                                          page_zero_bytes, writable, false)) {
-              return false;
-            }
-            skip = true;
-          } else {
-            ASSERT(false);
-          }
-        }
+        
       }else{
         kpage = frame_get_frame(0, upage);
         /* Load this page. */
